@@ -16,10 +16,12 @@
 #include <regex>
 
 // ROOT includes
+#include "TGaxis.h"
 #include "TCanvas.h"
 #include "TH2F.h"
 #include "TLatex.h"
 #include "TStyle.h"
+#include "TPaletteAxis.h"
 
 //#define MMDEBUG  /* to make it verbose */
 
@@ -652,17 +654,37 @@ namespace beamSpotPI {
       // this is the fine gradient palette (blue to red)
       double max = h2_BSShadow->GetMaximum();
       double min = h2_BSShadow->GetMinimum();
+
+      // double val_white = 0.;
+      // double per_white = (max != min) ? ((val_white - min) / (max - min)) : 0.5;
+
+      // const int number = 3;
+      // double Red[number] = {0., 1., 1.};
+      // double Green[number] = {0., 1., 0.};
+      // double Blue[number] = {1., 1., 0.};
+      // double Stops[number] = {0., per_white, 1.};
+      // int nb = 256;
+      // h2_BSShadow->SetContour(nb);
+      // TColor::CreateGradientColorTable(number, Stops, Red, Green, Blue, nb);
+
       double val_white = 0.;
       double per_white = (max != min) ? ((val_white - min) / (max - min)) : 0.5;
 
-      const int number = 3;
-      double Red[number] = {0., 1., 1.};
-      double Green[number] = {0., 1., 0.};
-      double Blue[number] = {1., 1., 0.};
-      double Stops[number] = {0., per_white, 1.};
-      int nb = 256;
-      h2_BSShadow->SetContour(nb);
-      TColor::CreateGradientColorTable(number, Stops, Red, Green, Blue, nb);
+      const int nStops = 3;
+
+      // Smooth scientific diverging colors: Red -> White -> Light Green
+      double Red[nStops] = {0.80, 1.00, 0.30};
+      double Green[nStops] = {0.00, 1.00, 0.75};
+      double Blue[nStops] = {0.00, 1.00, 0.30};
+
+      double Stops[nStops] = {0.0, per_white, 1.0};
+
+      int nColors = 256;
+      h2_BSShadow->SetContour(nColors);
+      TColor::CreateGradientColorTable(nStops, Stops, Red, Green, Blue, nColors);
+
+      TGaxis::SetMaxDigits(1);
+      TGaxis::SetExponentOffset(-0.1, 0.01, "z");
 
       h2_BSShadow->Draw("colz");
       h2_BSParameters->Draw("TEXTsame");
@@ -681,14 +703,14 @@ namespace beamSpotPI {
       if (this->m_plotAnnotations.ntags == 2) {
         ltx.DrawLatexNDC(
             gPad->GetLeftMargin() - 0.1,
-            1 - gPad->GetTopMargin() + 0.015,
+            1 - gPad->GetTopMargin() + 0.020,
             (fmt::sprintf(
                  "#splitline{A = #color[4]{%s}: %s}{B = #color[4]{%s}: %s}", f_tagname, f_runLSs, l_tagname, l_runLSs))
                 .c_str());
       } else {
         ltx.DrawLatexNDC(
             gPad->GetLeftMargin() - 0.1,
-            1 - gPad->GetTopMargin() + 0.015,
+            1 - gPad->GetTopMargin() + 0.020,
             (fmt::sprintf("#splitline{#color[4]{%s}}{A = %s | B = %s}", f_tagname, l_runLSs, f_runLSs)).c_str());
       }
 
@@ -1015,6 +1037,9 @@ namespace simBeamSpotPI {
       h2_SimBSShadow->GetZaxis()->SetTitle("#Delta Parameter(payload A - payload B)");
       h2_SimBSShadow->GetZaxis()->CenterTitle();
       h2_SimBSShadow->GetZaxis()->SetTitleOffset(1.5);
+
+      //TGaxis::SetMaxDigits(1);
+      //TGaxis::SetExponentOffset(-0.1, 0.01, "z");  // Y offset
 
       // this is the fine gradient palette (blue to red)
       double max = h2_SimBSShadow->GetMaximum();
