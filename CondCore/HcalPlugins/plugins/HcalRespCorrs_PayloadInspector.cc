@@ -724,6 +724,156 @@ namespace {
         return false;
     }  // fill method
   };
+
+  /**********************************************************
+     New class:
+     Plot overlay of response-corrections for all depths in the same canvas,
+     one pad per partition, multiple depth histograms per pad.
+  **********************************************************/
+  class HcalRespCorrsDepthsOverlay : public cond::payloadInspector::PlotImage<HcalRespCorrs> {
+  public:
+    HcalRespCorrsDepthsOverlay()
+        : cond::payloadInspector::PlotImage<HcalRespCorrs>("HCAL RespCorrs - overlay of depths per partition") {
+      setSingleIov(true);
+    }
+
+    bool fill(const std::vector<std::tuple<cond::Time_t, cond::Hash>>& iovs) override {
+      auto iov = iovs.front();
+      std::shared_ptr<HcalRespCorrs> payload = fetchPayload(std::get<1>(iov));
+      if (!payload.get())
+        return false;
+
+      HcalRespCorrContainer* objContainer = new HcalRespCorrContainer(payload, std::get<0>(iov));
+      const auto& items = objContainer->getAllItems();  // vector<pair<string, vector<HcalRespCorr>>>
+
+      if (items.empty())
+        return false;
+
+      TCanvas canvas("DepthsOverlay", "Depths overlay per partition", 1400, 1000);
+      canvas.Divide(3, 2);
+
+      // colors to cycle through for depths
+      std::vector<int> colors = {kBlue, kRed, kGreen + 2, kMagenta, kCyan + 2, kOrange, kYellow, kViolet};
+
+      // Prepare parts list
+      std::vector<std::string> parts(items.size());
+      std::transform(
+          items.begin(), items.end(), parts.begin(), [](const std::pair<std::string, std::vector<HcalRespCorr>>& p) {
+            return p.first;
+          });
+
+      unsigned int pad = 0;
+      for (const auto& part : parts) {
+        pad++;
+        canvas.cd(pad);
+        canvas.cd(pad)->SetTopMargin(0.05);
+        canvas.cd(pad)->SetLeftMargin(0.13);
+        canvas.cd(pad)->SetRightMargin(0.02);
+
+        // gather depths present in this partition
+        std::set<int> depths;
+        // find the partition vector using find_if (items is a vector of pairs)
+        auto itPart = std::find_if(
+            items.begin(), items.end(), [&part](const std::pair<std::string, std::vector<HcalRespCorr>>& p) {
+              return p.first == part;
+            });
+        if (itPart == items.end())
+          continue;
+
+        for (const auto& item : itPart->second) {
+          HcalDetId detId(item.rawId());
+          if (detId != HcalDetId())
+            depths.insert(detId.depth());
+        }
+
+        if (depths.empty())
+          continue;
+
+	std::map<int, TH1F*> histos;
+        // create histograms per depth
+        for (int d : depths) {
+          std::string hname = Form("h_%s_depth%d", part.c_str(), d);
+          histos[d] = new TH1F(
+              hname.c_str(),
+              Form("Response Corrections [%s] depth %d;correction factor;entries", part.c_str(), d),
+              100,
+              0.,
+              3.);
+        }
+
+        // fill histograms
+        for (const auto& item : itPart->second) {
+          HcalDetId detId(item.rawId());
+          if (detId == HcalDetId())
+            continue;
+          int d = detId.depth();
+          auto hit = histos.find(d);
+          if (hit != histos.end()) {
+            hit->second->Fill(objContainer->getValue(&item));
+          }
+        }
+
+        // find global maximum to set y-range
+        double globalMax = 0.;
+        for (const auto& p : histos)
+          globalMax = std::max(globalMax, p.second->GetMaximum());
+
+
+	std::cout << "globalMax : "<< globalMax << std::endl;
+	
+        bool first = true;
+        TLegend legend(0.62, 0.62, 0.95, 0.92);
+        legend.SetTextSize(0.035);
+        unsigned int idx = 0;
+        for (const auto& p : histos) {
+          int color = colors[idx % colors.size()];
+	  std::cout << "color: " << color << std::endl;
+          //beautifyPlot(p.second, color);
+          if (first) {
+            if (globalMax > 0.)
+              p.second->SetMaximum(1.1 * globalMax);
+            p.second->Draw();
+            first = false;
+          } else {
+            p.second->Draw("same");
+          }
+          legend.AddEntry(p.second, Form("depth %d", p.first), "L");
+          ++idx;
+        }
+
+        // Add simple title text
+        TLatex title;
+        title.SetTextSize(0.03);
+        title.DrawLatexNDC(0.14, 0.94, Form("%s", part.c_str()));
+
+        legend.Draw("same");
+      }
+
+      std::string fileName(this->m_imageFileName);
+      canvas.SaveAs(fileName.c_str());
+      return true;
+    }
+
+  private:
+    void beautifyPlot(std::shared_ptr<TH1F> hist, int kColor) {
+      hist->SetStats(kFALSE);
+      hist->SetLineWidth(2);
+      hist->SetLineColor(kColor);
+      hist->GetXaxis()->CenterTitle(true);
+      hist->GetYaxis()->CenterTitle(true);
+      hist->GetXaxis()->SetTitleFont(42);
+      hist->GetYaxis()->SetTitleFont(42);
+      hist->GetXaxis()->SetTitleSize(0.05);
+      hist->GetYaxis()->SetTitleSize(0.05);
+      hist->GetXaxis()->SetTitleOffset(0.9);
+      hist->GetYaxis()->SetTitleOffset(1.5);
+      hist->GetXaxis()->SetLabelFont(42);
+      hist->GetYaxis()->SetLabelFont(42);
+      hist->GetYaxis()->SetLabelSize(.05);
+      hist->GetXaxis()->SetLabelSize(.05);
+    }
+  };
+
 }  // namespace
 
 // Register the classes as boost python plugin
@@ -744,4 +894,6 @@ PAYLOAD_INSPECTOR_MODULE(HcalRespCorrs) {
   PAYLOAD_INSPECTOR_CLASS(HcalRespCorrsRatioHE);
   PAYLOAD_INSPECTOR_CLASS(HcalRespCorrsPlotHF);
   PAYLOAD_INSPECTOR_CLASS(HcalRespCorrsRatioHF);
+  // new class registration
+  PAYLOAD_INSPECTOR_CLASS(HcalRespCorrsDepthsOverlay);
 }
