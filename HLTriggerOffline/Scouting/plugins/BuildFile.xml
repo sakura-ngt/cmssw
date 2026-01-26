@@ -10,7 +10,9 @@
 <use name="FWCore/Utilities"/>
 <use name="HLTrigger/HLTcore"/>
 <use name="L1Trigger/L1TGlobal"/>
+<use name="RecoVertex/VertexTools"/>
+<use name="RecoVertex/KalmanVertexFit"/>
+<use name="TrackingTools/IPTools"/>
 <use name="TrackingTools/Records"/>
 <use name="TrackingTools/TransientTrack"/>
-<use name="RecoVertex/VertexTools"/>
 <flags EDM_PLUGIN="1"/>
