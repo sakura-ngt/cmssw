@@ -18,12 +18,11 @@
 
 // system include files
 #include <memory>
-
-#include "FWCore/Framework/interface/one/EDAnalyzer.h"
-#include "FWCore/MessageLogger/interface/MessageLogger.h"
-#include "MagneticField/Engine/interface/MagneticField.h"
+#include "TH1.h"
 
 // user include files
+#include "FWCore/MessageLogger/interface/MessageLogger.h"
+#include "MagneticField/Engine/interface/MagneticField.h"
 #include "FWCore/Framework/interface/EventSetup.h"
 #include "FWCore/Framework/interface/Frameworkfwd.h"
 #include "FWCore/Framework/interface/stream/EDProducer.h"
@@ -31,17 +30,13 @@
 #include "FWCore/Framework/interface/MakerMacros.h"
 #include "FWCore/Utilities/interface/InputTag.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
-
 #include "FWCore/Utilities/interface/ESGetToken.h"
 #include "DataFormats/Common/interface/ValueMap.h"
-
 #include "DataFormats/Common/interface/Handle.h"
 #include "DataFormats/TrackReco/interface/Track.h"
 #include "DataFormats/TrackReco/interface/TrackFwd.h"
 #include "DataFormats/VertexReco/interface/Vertex.h"
 #include "DataFormats/VertexReco/interface/VertexFwd.h"
-
-//Scouting data formats
 #include "DataFormats/Scouting/interface/Run3ScoutingElectron.h"
 #include "DataFormats/Scouting/interface/Run3ScoutingPhoton.h"
 #include "DataFormats/Scouting/interface/Run3ScoutingPFJet.h"
@@ -49,8 +44,6 @@
 #include "DataFormats/Scouting/interface/Run3ScoutingTrack.h"
 #include "DataFormats/Scouting/interface/Run3ScoutingMuon.h"
 #include "DataFormats/Scouting/interface/Run3ScoutingParticle.h"
-
-//Vertex tools
 #include "RecoVertex/KalmanVertexFit/interface/KalmanVertexFitter.h"
 #include "RecoVertex/VertexTools/interface/VertexDistance3D.h"
 #include "RecoVertex/VertexTools/interface/VertexDistanceXY.h"
@@ -58,8 +51,6 @@
 #include "TrackingTools/Records/interface/TransientTrackRecord.h"
 #include "TrackingTools/TransientTrack/interface/TransientTrack.h"
 #include "TrackingTools/TransientTrack/interface/TransientTrackBuilder.h"
-
-#include "TH1.h"
 #include "FWCore/ServiceRegistry/interface/Service.h"
 #include "CommonTools/UtilAlgos/interface/TFileService.h"
 
@@ -71,8 +62,9 @@ using namespace edm;
 
 class ScoutingVertexer : public edm::stream::EDProducer<> {
 public:
-  ~ScoutingVertexer() override;
+  ~ScoutingVertexer() override = default;
   explicit ScoutingVertexer(edm::ParameterSet const& params);
+  static void fillDescriptions(edm::ConfigurationDescriptions& descriptions);
 
 private:
   typedef std::set<reco::TrackRef> track_set;
@@ -129,9 +121,9 @@ private:
   const edm::EDGetTokenT<std::vector<reco::Track>> seed_tracks_token_;
   const edm::ESGetToken<TransientTrackBuilder, TransientTrackRecord> token_builder;
 
-  edm::EDPutTokenT<reco::VertexCollection> putToken_;
-  edm::EDPutTokenT<edm::ValueMap<std::pair<float, float>>> vertexShiftZToken_;
-  edm::EDPutTokenT<edm::ValueMap<std::pair<float, float>>> vertexShift3DToken_;
+  const edm::EDPutTokenT<reco::VertexCollection> putToken_;
+  const edm::EDPutTokenT<edm::ValueMap<std::pair<float, float>>> vertexShiftZToken_;
+  const edm::EDPutTokenT<edm::ValueMap<std::pair<float, float>>> vertexShift3DToken_;
 
   // ----------member data ---------------------------
 
@@ -204,14 +196,6 @@ private:
 };
 
 //
-// constants, enums and typedefs
-//
-
-//
-// static data member definitions
-//
-
-//
 // constructors and destructor
 //
 
@@ -241,17 +225,12 @@ ScoutingVertexer::ScoutingVertexer(edm::ParameterSet const& params)
       max_nm1_refit_count(params.getParameter<int>("max_nm1_refit_count")),
       investigate_merged_vertices(params.getParameter<bool>("investigate_merged_vertices")),
       verbose(params.getParameter<bool>("verbose")),
-
       beamspot_token(consumes<reco::BeamSpot>(params.getParameter<edm::InputTag>("beamspot_src"))),
       seed_tracks_token_(consumes(params.getParameter<edm::InputTag>("seed_tracks_src"))),
       token_builder(esConsumes(edm::ESInputTag("", "TransientTrackBuilder"))),
-
-      putToken_{produces()} {
-  vertexShiftZToken_ = produces<edm::ValueMap<std::pair<float, float>>>("vtxZShift");
-  vertexShift3DToken_ = produces<edm::ValueMap<std::pair<float, float>>>("vtx3DShift");
-}
-
-ScoutingVertexer::~ScoutingVertexer() {}
+      putToken_{produces()},
+      vertexShiftZToken_{produces<edm::ValueMap<std::pair<float, float>>>("vtxZShift")},
+      vertexShift3DToken_{produces<edm::ValueMap<std::pair<float, float>>>("vtx3DShift")} {}
 
 //
 // member functions
@@ -299,12 +278,13 @@ void ScoutingVertexer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup
     float IP_sig = ttk_dist.second.significance();
     if ((tk_ref->pt() > pt_min_cut) && (tk_ref->hitPattern().numberOfValidPixelHits() > npixelHits_min_cut) &&
         (tk_ref->hitPattern().numberOfValidStripHits() > nstripHits_min_cut) &&
-        (tk_ref->hitPattern().trackerLayersWithMeasurement() > ntrackerLayers_min_cut) && (fabs(tk_ref->eta()) < 2.4)) {
-      //if ((tk_ref->pt()>0.9) && (fabs(tk_ref->eta())<2.4)){
-      if (fabs(tk_ref->eta()) < 1.5) {
+        (tk_ref->hitPattern().trackerLayersWithMeasurement() > ntrackerLayers_min_cut) &&
+        (std::abs(tk_ref->eta()) < 2.4)) {
+      //if ((tk_ref->pt()>0.9) && (std::abs(tk_ref->eta())<2.4)){
+      if (std::abs(tk_ref->eta()) < 1.5) {
         h_dxyErr_weighted_sum_barrel->Fill(tk_ref->pt(), tk_ref->dxyError());
         h_dszErr_weighted_sum_barrel->Fill(tk_ref->pt(), tk_ref->dszError());
-        h_dszdxyCov_weighted_sum_barrel->Fill(tk_ref->pt(), fabs(tk_ref->covariance(3, 4)));
+        h_dszdxyCov_weighted_sum_barrel->Fill(tk_ref->pt(), std::abs(tk_ref->covariance(3, 4)));
         h_dxyErr_weighted_sq_sum_barrel->Fill(tk_ref->pt(), pow(tk_ref->dxyError(), 2));
         h_dszErr_weighted_sq_sum_barrel->Fill(tk_ref->pt(), pow(tk_ref->dszError(), 2));
         h_dszdxyCov_weighted_sq_sum_barrel->Fill(tk_ref->pt(), pow(tk_ref->covariance(3, 4), 2));
@@ -313,7 +293,7 @@ void ScoutingVertexer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup
       } else {
         h_dxyErr_weighted_sum_disk->Fill(tk_ref->pt(), tk_ref->dxyError());
         h_dszErr_weighted_sum_disk->Fill(tk_ref->pt(), tk_ref->dszError());
-        h_dszdxyCov_weighted_sum_disk->Fill(tk_ref->pt(), fabs(tk_ref->covariance(3, 4)));
+        h_dszdxyCov_weighted_sum_disk->Fill(tk_ref->pt(), std::abs(tk_ref->covariance(3, 4)));
         h_dxyErr_weighted_sq_sum_disk->Fill(tk_ref->pt(), pow(tk_ref->dxyError(), 2));
         h_dszErr_weighted_sq_sum_disk->Fill(tk_ref->pt(), pow(tk_ref->dszError(), 2));
         h_dszdxyCov_weighted_sq_sum_disk->Fill(tk_ref->pt(), pow(tk_ref->covariance(3, 4), 2));
@@ -731,18 +711,18 @@ void ScoutingVertexer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup
                                (vnm1.z() - v[0]->z()) * (vnm1.z() - v[0]->z());
         const double distz = sqrt((vnm1.z() - v[0]->z()) * (vnm1.z() - v[0]->z()));
         shiftZVec[seed_track_index_map[tks[i]]] =
-            std::make_pair(distz, sqrt(fabs(vnm1.covariance(2, 2) - v[0]->covariance(2, 2))));
+            std::make_pair(distz, sqrt(std::abs(vnm1.covariance(2, 2) - v[0]->covariance(2, 2))));
         AlgebraicVector3 vDiff;
         vDiff[0] = (vnm1.x() - v[0]->x()) / sqrt(dist3_2);
         vDiff[1] = (vnm1.y() - v[0]->y()) / sqrt(dist3_2);
         vDiff[2] = (vnm1.z() - v[0]->z()) / sqrt(dist3_2);
-        //AlgebraicSymMatrix33 error = fabs(vnm1.covariance()-v[0]->covariance());
+        //AlgebraicSymMatrix33 error = std::abs(vnm1.covariance()-v[0]->covariance());
         AlgebraicSymMatrix33 error1 = vnm1.covariance();
         AlgebraicSymMatrix33 error2 = v[0]->covariance();
         //double err2 = ROOT::Math::Similarity(error, vDiff);
         double err1_2 = ROOT::Math::Similarity(error1, vDiff);
         double err2_2 = ROOT::Math::Similarity(error2, vDiff);
-        double err3D = sqrt(fabs(err1_2 - err2_2));
+        double err3D = sqrt(std::abs(err1_2 - err2_2));
         //shift3DVec[seed_track_index_map[tks[i]]] = std::make_pair(sqrt(dist3_2),sqrt(err2));
         shift3DVec[seed_track_index_map[tks[i]]] = std::make_pair(sqrt(dist3_2), err3D);
 
@@ -824,7 +804,7 @@ void ScoutingVertexer::produce(edm::Event& iEvent, const edm::EventSetup& iSetup
 
           double phi1 = atan2(v1y, v1x);
 
-          if (fabs(reco::deltaPhi(phi0, phi1)) < 0.5 && v_dist.value() < 0.0500 && dBV0 > 0.0100 && dBV1 > 0.0100) {
+          if (std::abs(reco::deltaPhi(phi0, phi1)) < 0.5 && v_dist.value() < 0.0500 && dBV0 > 0.0100 && dBV1 > 0.0100) {
             track_set tracks_to_fit;
             for (int i = 0; i < 2; ++i)
               for (auto tk : tracks[i])
@@ -960,47 +940,37 @@ void ScoutingVertexer::endStream() {
   h_weight_sq_sum_disk->Write();
 }
 
-// ------------ method called when starting to processes a run  ------------
-/*
-void
-ScoutingVertexer::beginRun(edm::Run const&, edm::EventSetup const&)
-{
-}
-*/
-
-// ------------ method called when ending the processing of a run  ------------
-/*
-void
-ScoutingVertexer::endRun(edm::Run const&, edm::EventSetup const&)
-{
-}
-*/
-
-// ------------ method called when starting to processes a luminosity block  ------------
-/*
-void
-ScoutingVertexer::beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&)
-{
-}
-*/
-
-// ------------ method called when ending the processing of a luminosity block  ------------
-/*
-void
-ScoutingVertexer::endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&)
-{
-}
-*/
-
-/* ------------ method fills 'descriptions' with the allowed parameters for the module  ------------
 void ScoutingVertexer::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
-  //The following says we do not know what parameters are allowed so do no validation
-  // Please change this to state exactly what you do use, even if it is no parameters
   edm::ParameterSetDescription desc;
-  desc.setUnknown();
-  descriptions.addDefault(desc);
+  desc.add<double>("pt_min_cut");
+  desc.add<double>("dxySig_min_cut");
+  desc.add<double>("dxySig_max_cut");
+  desc.add<int>("npixelHits_min_cut");
+  desc.add<int>("nstripHits_min_cut");
+  desc.add<int>("ntrackerLayers_min_cut");
+  desc.add<int>("n_tracks_per_seed_vertex");
+  desc.add<double>("max_seed_vertex_chi2");
+  desc.add<bool>("use_2d_vertex_dist");
+  desc.add<bool>("use_2d_track_dist");
+  desc.add<bool>("remove_one_track_at_a_time");
+  desc.add<double>("merge_shared_dist");
+  desc.add<double>("merge_shared_sig");
+  desc.add<double>("max_track_vertex_dist");
+  desc.add<double>("max_track_vertex_sig");
+  desc.add<double>("min_track_vertex_sig_to_remove");
+  desc.add<bool>("resolve_split_vertices_loose");
+  desc.add<bool>("resolve_split_vertices_tight");
+  desc.add<double>("merge_anyway_sig");
+  desc.add<double>("merge_anyway_dist");
+  desc.add<double>("max_nm1_refit_dist3");
+  desc.add<double>("max_nm1_refit_distz");
+  desc.add<int>("max_nm1_refit_count");
+  desc.add<bool>("investigate_merged_vertices");
+  desc.add<bool>("verbose");
+  desc.add<edm::InputTag>("beamspot_src");
+  desc.add<edm::InputTag>("seed_tracks_src");
+  descriptions.addWithDefaultLabel(desc);
 }
-*/
 
 //define this as a plug-in
 DEFINE_FWK_MODULE(ScoutingVertexer);
