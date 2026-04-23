@@ -412,53 +412,59 @@ namespace {
       int EBtot[kGains], EEtot[kGains];
       for (int gId = 0; gId < kGains; gId++) {
         barrel_m[gId] = new TH2F(Form("EBm%i", gId),
-                                 Form("mean %i EB", gainValues[gId]),
+                                 Form("mean Gain %i EB", gainValues[gId]),
                                  MAX_IPHI,
                                  0,
                                  MAX_IPHI,
                                  2 * MAX_IETA,
                                  -MAX_IETA,
                                  MAX_IETA);
+        barrel_m[gId]->SetTitleSize(0.06);
         endc_p_m[gId] = new TH2F(Form("EE+m%i", gId),
-                                 Form("mean %i EE+", gainValues[gId]),
+                                 Form("mean Gain %i EE+", gainValues[gId]),
                                  IX_MAX,
                                  IX_MIN,
                                  IX_MAX + 1,
                                  IY_MAX,
                                  IY_MIN,
                                  IY_MAX + 1);
+        endc_p_m[gId]->SetTitleSize(0.06);
         endc_m_m[gId] = new TH2F(Form("EE-m%i", gId),
-                                 Form("mean %i EE-", gainValues[gId]),
+                                 Form("mean Gain %i EE-", gainValues[gId]),
                                  IX_MAX,
                                  IX_MIN,
                                  IX_MAX + 1,
                                  IY_MAX,
                                  IY_MIN,
                                  IY_MAX + 1);
+        endc_m_m[gId]->SetTitleSize(0.06);
         barrel_r[gId] = new TH2F(Form("EBr%i", gId),
-                                 Form("rms %i EB", gainValues[gId]),
+                                 Form("rms Gain %i EB", gainValues[gId]),
                                  MAX_IPHI,
                                  0,
                                  MAX_IPHI,
                                  2 * MAX_IETA,
                                  -MAX_IETA,
                                  MAX_IETA);
+        barrel_r[gId]->SetTitleSize(0.06);
         endc_p_r[gId] = new TH2F(Form("EE+r%i", gId),
-                                 Form("rms %i EE+", gainValues[gId]),
+                                 Form("rms Gain %i EE+", gainValues[gId]),
                                  IX_MAX,
                                  IX_MIN,
                                  IX_MAX + 1,
                                  IY_MAX,
                                  IY_MIN,
                                  IY_MAX + 1);
+        endc_p_r[gId]->SetTitleSize(0.06);
         endc_m_r[gId] = new TH2F(Form("EE-r%i", gId),
-                                 Form("rms %i EE-", gainValues[gId]),
+                                 Form("rms Gain %i EE-", gainValues[gId]),
                                  IX_MAX,
                                  IX_MIN,
                                  IX_MAX + 1,
                                  IY_MAX,
                                  IY_MIN,
                                  IY_MAX + 1);
+        endc_m_r[gId]->SetTitleSize(0.06);
         EBmean[gId] = 0.;
         EBrms[gId] = 0.;
         EEmean[gId] = 0.;
@@ -742,7 +748,7 @@ namespace {
 
       gStyle->SetPalette(1);
       gStyle->SetOptStat(0);
-      TCanvas canvas("CC map", "CC map", 1600, 2600);
+      TCanvas canvas("CC map", "CC map", 1600, 860);
       TLatex t1;
       t1.SetNDC();
       t1.SetTextAlign(26);
@@ -750,7 +756,7 @@ namespace {
       std::string dr[2] = {"-", "/"};
       if (ntags == 2) {
         if (len < 58) {
-          t1.SetTextSize(0.025);
+          t1.SetTextSize(0.030);
           t1.DrawLatex(0.5,
                        0.96,
                        Form("%s IOV %i %s %s  IOV %i",
@@ -760,23 +766,26 @@ namespace {
                             l_tagname[0].c_str(),
                             run[0]));
         } else {
-          t1.SetTextSize(0.05);
+          t1.SetTextSize(0.06);
           t1.DrawLatex(0.5, 0.96, Form("Ecal Pedestals, IOV %i %s %i", run[1], dr[method].c_str(), run[0]));
         }
       } else {
-        t1.SetTextSize(0.05);
+        t1.SetTextSize(0.06);
         t1.DrawLatex(0.5, 0.96, Form("%s, IOV %i %s %i", l_tagname[0].c_str(), run[1], dr[method].c_str(), run[0]));
       }
       float xmi[3] = {0.0, 0.24, 0.76};
       float xma[3] = {0.24, 0.76, 1.00};
+
       TPad*** pad = new TPad**[6];
       int view = 0;
       for (int gId = 0; gId < kGains; gId++) {
+        if (gId != 0)
+          continue;
         for (int val = 0; val < 2; val++) {  //  mean and sigma
           pad[view] = new TPad*[3];
           for (int obj = 0; obj < 3; obj++) {
-            float yma = 0.94 - (0.16 * view);
-            float ymi = yma - 0.14;
+            float yma = 0.94 - (0.50 * view);
+            float ymi = yma - 0.435;
             pad[view][obj] =
                 new TPad(Form("p_%i_%i", obj, view), Form("p_%i_%i", obj, view), xmi[obj], ymi, xma[obj], yma);
             pad[view][obj]->Draw();
@@ -791,8 +800,8 @@ namespace {
           EBrms[gId] = 0.001;
         pEBmin[gId] = EBmean[gId] - kRMS * EBrms[gId];
         pEBmax[gId] = EBmean[gId] + kRMS * EBrms[gId];
-        //	std::cout << " mean " << EBmean[gId] << " rms " << EBrms[gId] << " entries " << EBtot[gId] << " min " << pEBmin[gId]
-        //		  << " max " << pEBmax[gId] << std::endl;
+        //std::cout << " mean " << EBmean[gId] << " rms " << EBrms[gId] << " entries " << EBtot[gId] << " min "
+        //          << pEBmin[gId] << " max " << pEBmax[gId] << std::endl;
         vt = (double)EEtot[gId];
         EEmean[gId] = EEmean[gId] / vt;
         EErms[gId] = (EErms[gId] / vt) - (EEmean[gId] * EEmean[gId]);
@@ -801,21 +810,22 @@ namespace {
           EErms[gId] = 0.001;
         pEEmin[gId] = EEmean[gId] - kRMS * EErms[gId];
         pEEmax[gId] = EEmean[gId] + kRMS * EErms[gId];
-        //	std::cout << " mean " << EEmean[gId] << " rms " << EErms[gId] << " entries " << EEtot[gId] << " min " << pEEmin[gId]
-        //		  << " max " << pEEmax[gId] << std::endl;
+        //std::cout << " mean " << EEmean[gId] << " rms " << EErms[gId] << " entries " << EEtot[gId] << " min "
+        //          << pEEmin[gId] << " max " << pEEmax[gId] << std::endl;
       }
-      for (int gId = 0; gId < kGains; gId++) {
+
+      for (int gId = 0; gId < 1; gId++) {
         pad[gId][0]->cd();
         DrawEE(endc_m_m[gId], -2., 2.);
-        pad[gId + kGains][0]->cd();
+        pad[gId + 1][0]->cd();
         DrawEE(endc_m_r[gId], pEEmin[gId], pEEmax[gId]);
         pad[gId][1]->cd();
         DrawEB(barrel_m[gId], -2., 2.);
-        pad[gId + kGains][1]->cd();
+        pad[gId + 1][1]->cd();
         DrawEB(barrel_r[gId], pEBmin[gId], pEBmax[gId]);
         pad[gId][2]->cd();
         DrawEE(endc_p_m[gId], -2., 2.);
-        pad[gId + kGains][2]->cd();
+        pad[gId + 1][2]->cd();
         DrawEE(endc_p_r[gId], pEEmin[gId], pEEmax[gId]);
       }
 

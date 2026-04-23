@@ -4,6 +4,11 @@
 inline void DrawEB(TH2F* ebmap, float min, float max) {
   ebmap->SetXTitle("i#phi");
   ebmap->SetYTitle("i#eta");
+  ebmap->GetXaxis()->SetTitleOffset(0.8);
+  ebmap->GetYaxis()->SetTitleOffset(0.5);
+  ebmap->GetXaxis()->SetTitleSize(0.06);
+  ebmap->GetYaxis()->SetTitleSize(0.06);
+
   ebmap->GetXaxis()->SetNdivisions(-418, kFALSE);
   ebmap->GetYaxis()->SetNdivisions(-1702, kFALSE);
   ebmap->GetXaxis()->SetLabelSize(0.03);
@@ -52,6 +57,11 @@ inline void DrawEE(TH2F* endc, float min, float max) {
 
   endc->SetXTitle("ix");
   endc->SetYTitle("iy");
+  endc->GetXaxis()->SetTitleOffset(0.8);
+  endc->GetYaxis()->SetTitleOffset(1.0);
+  endc->GetXaxis()->SetTitleSize(0.06);
+  endc->GetYaxis()->SetTitleSize(0.045);
+
   endc->SetMaximum(max);
   endc->SetMinimum(min);
   endc->Draw("colz1");
