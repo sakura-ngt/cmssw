@@ -34,7 +34,22 @@ scoutingCollectionMonitor = DQMEDAnalyzer('ScoutingCollectionMonitor',
                                           pfRecHitsEE            = cms.InputTag(""),
                                           pfCleanedRecHitsEB     = cms.InputTag(""),
                                           pfCleanedRecHitsEE     = cms.InputTag(""),
-                                          pfRecHitsHBHE          = cms.InputTag(""))
+                                          pfRecHitsHBHE          = cms.InputTag(""),
+                                          ## upper edges of the multiplicity histograms (Run 3 defaults);
+                                          ## override these to scale the plots for the Phase-2 occupancies
+                                          multiplicityRanges     = cms.PSet(
+                                              nTracks            = cms.int32(400),
+                                              nPrimaryVertices   = cms.int32(50),
+                                              nDisplacedVertices = cms.int32(10),
+                                              nMuons             = cms.int32(10),
+                                              nElectrons         = cms.int32(10),
+                                              nPhotons           = cms.int32(25),
+                                              nPFJets            = cms.int32(100),
+                                              nPFCands           = cms.int32(1000),
+                                              nEBRecHits         = cms.int32(1000),
+                                              nEERecHits         = cms.int32(1000),
+                                              nHBHERecHits       = cms.int32(2000),
+                                              pileUp             = cms.double(70.)))
 
 ## Add the scouting rechits monitoring (only for 2025, integrated in menu GRun 2025 V1.3)
 ## See https://its.cern.ch/jira/browse/CMSHLT-3607
@@ -45,3 +60,8 @@ run3_scouting_2025.toModify(scoutingCollectionMonitor,
                             pfCleanedRecHitsEB = ("hltScoutingRecHitPacker", "EBCleaned"),
                             pfCleanedRecHitsEE = ("hltScoutingRecHitPacker", "EECleaned"),
                             pfRecHitsHBHE      = ("hltScoutingRecHitPacker", "HBHE"))
+
+## To scale the multiplicity plots for higher occupancies (e.g. Phase-2, PU ~ 200), override the ranges, e.g.
+##   scoutingCollectionMonitor.multiplicityRanges.nTracks = 2000
+##   scoutingCollectionMonitor.multiplicityRanges.nPrimaryVertices = 250
+##   scoutingCollectionMonitor.multiplicityRanges.pileUp = 250.
