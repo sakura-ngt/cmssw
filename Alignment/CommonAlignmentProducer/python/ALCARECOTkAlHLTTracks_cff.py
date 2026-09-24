@@ -27,6 +27,13 @@ ALCARECOTkAlHLTTracks = Alignment.CommonAlignmentProducer.AlignmentTrackSelector
 ALCARECOTkAlHLTTracks.src = cms.InputTag("hltMergedTracks") # run on hltMergedTracks instead of generalTracks
 ALCARECOTkAlHLTTracks.filter = True ##do not store empty events	
 
+## modify input tracks and acceptance for the Phase-2 HLT (hltGeneralTracks, |eta| < 4)
+from Configuration.Eras.Modifier_phase2_common_cff import phase2_common
+phase2_common.toModify(ALCARECOTkAlHLTTracks,
+                       src = "hltGeneralTracks",
+                       etaMin = -4.0,
+                       etaMax = 4.0)
+
 ## modify input tracks for HLT Aligmment PCL during Heavy Ions
 from Configuration.Eras.Modifier_pp_on_PbPb_run3_cff import pp_on_PbPb_run3
 pp_on_PbPb_run3.toModify(ALCARECOTkAlHLTTracks,
@@ -46,3 +53,9 @@ ALCARECOTkAlHLTTracks.TwoBodyDecaySelector.applyChargeFilter = False
 ALCARECOTkAlHLTTracks.TwoBodyDecaySelector.applyAcoplanarityFilter = False
 
 seqALCARECOTkAlHLTTracks = cms.Sequence(ALCARECOTkAlHLTTracksHLT+ALCARECOTkAlHLTTracksDCSFilter+ALCARECOTkAlHLTTracks)
+
+## Phase-2: no DCSRecord / scalersRawToDigi in the event, and the Run-1/2/3
+## tracker partitions (TIB/TID/TOB/TEC, BPIX/FPIX) do not exist, so the DCS
+## filter has nothing to look at. Drop it from the sequence.
+_seqALCARECOTkAlHLTTracksPhase2 = cms.Sequence(ALCARECOTkAlHLTTracksHLT+ALCARECOTkAlHLTTracks)
+phase2_common.toReplaceWith(seqALCARECOTkAlHLTTracks, _seqALCARECOTkAlHLTTracksPhase2)

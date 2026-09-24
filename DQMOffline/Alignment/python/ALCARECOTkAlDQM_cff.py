@@ -400,6 +400,11 @@ from Configuration.Eras.Modifier_pp_on_PbPb_run3_cff import pp_on_PbPb_run3
 pp_on_PbPb_run3.toModify(ALCARECOTkAlHLTTracksTkAlDQM,
                          ReferenceTrackProducer= "hltMergedTracksPPOnAA")
 
+from Configuration.Eras.Modifier_phase2_common_cff import phase2_common
+phase2_common.toModify(ALCARECOTkAlHLTTracksTkAlDQM,
+                       runsOnReco = False,
+                       ReferenceTrackProducer= "hltGeneralTracks")
+
 ALCARECOTkAlHLTTracksDQM = cms.Sequence( ALCARECOTkAlHLTTracksTrackingDQM  + ALCARECOTkAlHLTTracksTkAlDQM )
 
 ########################################################
