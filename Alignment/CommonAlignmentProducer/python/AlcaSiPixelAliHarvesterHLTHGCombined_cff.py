@@ -39,6 +39,16 @@ SiPixelAliPedeAlignmentProducerHLTHGCombined = AlignmentProducer.clone(
     trackerAlignmentRcdName = "TrackerAlignmentHLTHGCombinedRcd"
 )
 
+from Configuration.Eras.Modifier_phase2_common_cff import phase2_common
+phase2_common.toModify(SiPixelAliPedeAlignmentProducerHLTHGCombined,
+    ParameterBuilder = dict(
+        Selector = dict(
+            alignParams = ["TrackerP2PXBLadder,111111",
+                           "TrackerP2PXECPanel,111111"]
+        )
+    )
+)
+
 SiPixelAliPedeAlignmentProducerHLTHGCombined.algoConfig = MillePedeAlignmentAlgorithm.clone(
     mode = 'pede',
     runAtPCL = True,
