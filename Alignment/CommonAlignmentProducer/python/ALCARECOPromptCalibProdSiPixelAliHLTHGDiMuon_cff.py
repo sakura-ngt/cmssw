@@ -2,17 +2,18 @@ import FWCore.ParameterSet.Config as cms
 
 # ------------------------------------------------------------------------------
 # configure a filter to run only on the events selected by TkAlZMuMu AlcaReco
-from HLTrigger.HLTfilters.hltHighLevel_cfi import *
-ALCARECOTkAlZMuMuFilterForSiPixelAliHLT = hltHighLevel.clone(
-    HLTPaths = ['pathALCARECOTkAlHLTTracksZMuMu'],
-    throw = True, ## dont throw on unknown path names,
-    TriggerResultsTag = "TriggerResults::RECO"
-)
+# from HLTrigger.HLTfilters.hltHighLevel_cfi import *
+# ALCARECOTkAlZMuMuFilterForSiPixelAliHLT = hltHighLevel.clone(
+#     HLTPaths = ['pathALCARECOTkAlHLTTracksZMuMu'],
+#     throw = True, ## dont throw on unknown path names,
+#     TriggerResultsTag = "TriggerResults::RECO"
+# )
+
+ALCARECOTkAlZMuMuFilterForSiPixelAliHLT = cms.EDFilter("PathStatusFilter",
+                                                       logicalExpression = cms.string("pathALCARECOTkAlHLTTracksZMuMu"))
 
 from Alignment.CommonAlignmentProducer.ALCARECOPromptCalibProdSiPixelAliHLT_cff import *
 from Alignment.CommonAlignmentProducer.LSNumberFilter_cfi import *
-
-
 
 # Ingredient: AlignmentTrackSelector
 # track selector for HighPurity tracks
@@ -63,8 +64,8 @@ SiPixelAliMilleAlignmentProducerHLTHGDimuon = SiPixelAliMilleAlignmentProducerHL
     ParameterBuilder = dict(
       Selector = cms.PSet(
 	alignParams = cms.vstring(
-	  "TrackerP1PXBLadder,111111",
-	  "TrackerP1PXECPanel,111111",
+            "TrackerP1PXBLadder,111111",
+            "TrackerP1PXECPanel,111111"
 	)
       )
     ),
@@ -100,6 +101,16 @@ SiPixelAliMilleAlignmentProducerHLTHGDimuon = SiPixelAliMilleAlignmentProducerHL
             UseInvalidHits = cms.bool(True),
             UseProjectedHits = cms.bool(True),
             UseRefittedState = cms.bool(True)
+        )
+    )
+)
+
+from Configuration.Eras.Modifier_phase2_common_cff import phase2_common
+phase2_common.toModify(SiPixelAliMilleAlignmentProducerHLTHGDimuon,
+    ParameterBuilder = dict(
+        Selector = dict(
+            alignParams = ["TrackerP2PXBLadder,111111",
+                           "TrackerP2PXECPanel,111111"]
         )
     )
 )

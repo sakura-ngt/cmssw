@@ -20,6 +20,7 @@ public:
 private:
   bool filter(edm::StreamID, edm::Event&, const edm::EventSetup&) const override;
 
+  const bool throwOnMissing_;
   const edm::EDGetTokenT<reco::MuonCollection> muonToken_;
   const double maxEta_;
   const double maxChi2_;
@@ -39,6 +40,7 @@ private:
 
 void AlignmentGoodIdMuonSelector::fillDescriptions(edm::ConfigurationDescriptions& descriptions) {
   edm::ParameterSetDescription desc;
+  desc.add<bool>("throwOnMissing", true)->setComment("trow on missing input collection, true by default");
   desc.add<edm::InputTag>("src", edm::InputTag("muons"))->setComment("Input muon collection");
   desc.add<double>("maxEta", 2.5)->setComment("|eta| cut");
   desc.add<double>("maxChi2", 20.)->setComment("max chi2 of the global tags");
@@ -56,7 +58,8 @@ void AlignmentGoodIdMuonSelector::fillDescriptions(edm::ConfigurationDescription
 }
 
 AlignmentGoodIdMuonSelector::AlignmentGoodIdMuonSelector(const edm::ParameterSet& iConfig)
-    : muonToken_(consumes<reco::MuonCollection>(iConfig.getParameter<edm::InputTag>("src"))),
+    : throwOnMissing_(iConfig.getParameter<bool>("throwOnMissing")),
+      muonToken_(consumes<reco::MuonCollection>(iConfig.getParameter<edm::InputTag>("src"))),
       maxEta_(iConfig.getParameter<double>("maxEta")),
       maxChi2_(iConfig.getParameter<double>("maxChi2")),
       minMuonHits_(iConfig.getParameter<int>("minMuonHits")),
@@ -75,10 +78,12 @@ AlignmentGoodIdMuonSelector::AlignmentGoodIdMuonSelector(const edm::ParameterSet
 }
 
 bool AlignmentGoodIdMuonSelector::filter(edm::StreamID, edm::Event& iEvent, const edm::EventSetup&) const {
-  edm::Handle<reco::MuonCollection> muons;
-  iEvent.getByToken(muonToken_, muons);
-
   auto selectedMuons = std::make_unique<reco::MuonCollection>();
+  const auto& muons = iEvent.getHandle(muonToken_);
+  if (!muons.isValid() && !throwOnMissing_) {
+    iEvent.put(std::move(selectedMuons));
+    return false;
+  }
 
   for (const auto& muon : *muons) {
     bool passPrimarySelection = true;

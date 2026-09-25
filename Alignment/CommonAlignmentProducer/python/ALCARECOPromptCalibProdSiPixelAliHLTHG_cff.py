@@ -2,12 +2,15 @@ import FWCore.ParameterSet.Config as cms
 
 # ------------------------------------------------------------------------------
 # configure a filter to run only on the events selected by TkAlMinBias AlcaReco
-from HLTrigger.HLTfilters.hltHighLevel_cfi import *
-ALCARECOTkAlMinBiasFilterForSiPixelAliHLTHG = hltHighLevel.clone(
-    HLTPaths = ['pathALCARECOTkAlHLTTracks'],
-    throw = True, ## dont throw on unknown path names,
-    TriggerResultsTag = "TriggerResults::RECO"
-)
+#from HLTrigger.HLTfilters.hltHighLevel_cfi import *
+# ALCARECOTkAlMinBiasFilterForSiPixelAliHLTHG = hltHighLevel.clone(
+#     HLTPaths = ['pathALCARECOTkAlHLTTracks'],
+#     throw = True, ## dont throw on unknown path names,
+#     TriggerResultsTag = "TriggerResults::RECO"
+# )
+
+ALCARECOTkAlMinBiasFilterForSiPixelAliHLTHG = cms.EDFilter("PathStatusFilter",
+                                                           logicalExpression = cms.string("pathALCARECOTkAlHLTTracks"))
 
 from Alignment.CommonAlignmentProducer.ALCARECOPromptCalibProdSiPixelAliHLT_cff import *
 from Alignment.CommonAlignmentProducer.LSNumberFilter_cfi import *
@@ -39,7 +42,7 @@ SiPixelAliMilleAlignmentProducerHLTHG = SiPixelAliMilleAlignmentProducerHLT.clon
         Selector = cms.PSet(
             alignParams = cms.vstring(
                 "TrackerP1PXBLadder,111111",
-                "TrackerP1PXECPanel,111111",
+                "TrackerP1PXECPanel,111111"
             )
         )
     ),
@@ -48,6 +51,16 @@ SiPixelAliMilleAlignmentProducerHLTHG = SiPixelAliMilleAlignmentProducerHLT.clon
         binaryFile = 'milleBinaryHLTHG_0.dat',
         treeFile = 'treeFileHLTHG.root',
         monitorFile = 'millePedeMonitorHLTHG.root'
+    )
+)
+
+from Configuration.Eras.Modifier_phase2_common_cff import phase2_common
+phase2_common.toModify(SiPixelAliMilleAlignmentProducerHLTHG,
+    ParameterBuilder = dict(
+        Selector = dict(
+            alignParams = ["TrackerP2PXBLadder,111111",
+                           "TrackerP2PXECPanel,111111"]
+        )
     )
 )
 

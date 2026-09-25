@@ -24,8 +24,14 @@ ALCARECOTkAlHLTTracksZMuMuDCSFilter = DPGAnalysis.Skims.skim_detstatus_cfi.dcsst
 
 import Alignment.CommonAlignmentProducer.TkAlMuonSelectors_cfi
 ALCARECOTkAlHLTTracksZMuMuGoodMuons = Alignment.CommonAlignmentProducer.TkAlMuonSelectors_cfi.TkAlGoodIdMuonSelector.clone(
-    #    src =  cms.InputTag("hltPFMuonMerging") # TODO type cast to muon ???
+    #src =  cms.InputTag("hltPFMuonMerging") # TODO type cast to muon ???
 )
+
+from Configuration.Eras.Modifier_phase2_common_cff import phase2_common
+phase2_common.toModify(ALCARECOTkAlHLTTracksZMuMuGoodMuons,
+                       throwOnMissing = False,
+                       src = "hltPhase2L3Muons")
+
 ALCARECOTkAlHLTTracksZMuMuRelCombIsoMuons = Alignment.CommonAlignmentProducer.TkAlMuonSelectors_cfi.TkAlRelCombIsoMuonSelector.clone(
     src = 'ALCARECOTkAlHLTTracksZMuMuGoodMuons'
 )
@@ -34,6 +40,12 @@ import Alignment.CommonAlignmentProducer.AlignmentTrackSelector_cfi
 ALCARECOTkAlHLTTracksZMuMu = Alignment.CommonAlignmentProducer.AlignmentTrackSelector_cfi.AlignmentTrackSelector.clone()
 ALCARECOTkAlHLTTracksZMuMu.src = cms.InputTag("hltMergedTracks") 
 ALCARECOTkAlHLTTracksZMuMu.filter = True ##do not store empty events
+
+## modify input tracks and acceptance for the Phase-2 HLT (hltGeneralTracks, |eta| < 4)
+phase2_common.toModify(ALCARECOTkAlHLTTracksZMuMu,
+                       src = "hltGeneralTracks",
+                       etaMin = -4.0,
+                       etaMax = 4.0)
 
 ## modify input tracks for HLT Aligmment PCL during Heavy Ions
 from Configuration.Eras.Modifier_pp_on_PbPb_run3_cff import pp_on_PbPb_run3
@@ -83,4 +95,13 @@ seqALCARECOTkAlHLTTracksZMuMu = cms.Sequence(ALCARECOTkAlHLTTracksZMuMuHLT+
                                              ALCARECOTkAlHLTTracksZMuMu+
                                              ALCARECOTkAlHLTPixelZMuMuVertexTracks)
 
+## Phase-2: no DCSRecord / scalersRawToDigi in the event, and the Run-1/2/3
+## tracker partitions (TIB/TID/TOB/TEC, BPIX/FPIX) do not exist, so the DCS
+## filter has nothing to look at. Drop it from the sequence.
+_seqALCARECOTkAlHLTTracksZMuMuPhase2 = cms.Sequence(ALCARECOTkAlHLTTracksZMuMuHLT+
+                                                    ALCARECOTkAlHLTTracksZMuMuGoodMuons+
+                                                    ALCARECOTkAlHLTTracksZMuMuRelCombIsoMuons+
+                                                    ALCARECOTkAlHLTTracksZMuMu+
+                                                    ALCARECOTkAlHLTPixelZMuMuVertexTracks)
 
+phase2_common.toReplaceWith(seqALCARECOTkAlHLTTracksZMuMu, _seqALCARECOTkAlHLTTracksZMuMuPhase2)
