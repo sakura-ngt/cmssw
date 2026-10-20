@@ -15,6 +15,7 @@ from HLTriggerOffline.Scouting.RecoTrackFromScoutingMonitor_cff import *
 from HLTriggerOffline.Scouting.ScoutingMuonTriggerAnalyzer_cfi import *
 from HLTriggerOffline.Scouting.ScoutingMuonTagProbeAnalyzer_cfi import *
 from HLTriggerOffline.Scouting.ScoutingMuonPropertiesMonitoring_cfi import *
+from HLTriggerOffline.Scouting.HLTScoutingDiMuonAlignmentMonitor_cfi import *
 
 ### Egamma monitoring
 from HLTriggerOffline.Scouting.HLTScoutingEGammaDqmOffline_cff import *
@@ -65,6 +66,8 @@ hltDqmOnlyScouting = cms.Sequence(recoTrackFromScoutingMonitorSequence +
                                   run3ScoutingElectronBestTrack +
                                   hltScoutingDileptonMonitor +
                                   ScoutingMuonPropertiesMonitor +
+                                  ScoutingDiMuonAlignmentMonitor +
+                                  ScoutingDiMuonAlignmentMonitorJpsi +
                                   hltScoutingDiMuonVertexMonitor +
                                   hltScoutingPi0Monitor +
                                   jetPreDQMSeqScouting +

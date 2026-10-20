@@ -12,19 +12,23 @@
 //       vertex and the primary vertex collection
 //     - Avoids KalmanVertexFitter (vertex already computed online)
 //
-//   Per-pair quantities monitored:
-//     * Invariant mass (full range + Z and J/ψ windows)
-//     * SV probability, χ²/ndof
-//     * PV–SV distance (xy and 3D) and significance
-//     * cos φ (xy and 3D) between di-muon momentum and PV→SV displacement
-//     * Per-muon track d_xy and d_z w.r.t. the primary vertex
-//
-// Author:     Auto-generated skeleton (based on ScoutingDileptonMonitor)
+//   For each opposite-sign muon pair inside the mass window of the decay
+//   mother, the di-muon vertex fitted at HLT for that pair is taken from the
+//   displaced-vertex collection (via Run3ScoutingMuon::vtxIndx()), and the
+//   primary vertex closest to it is used as reference (or the first one if
+//   useClosestVertex is false). Monitored quantities:
+//     * Invariant mass of all opposite-sign pairs
+//     * SV probability, chi2, chi2/ndof
+//     * PV-SV distance (xy and 3D), its uncertainty (full covariance) and significance
+//     * cos(phi) (xy and 3D) between the di-muon momentum and the PV->SV
+//       displacement, for pairs with PV-SV xy distance below maxSVdistXY
+//     * Per-muon track d_xy and d_z w.r.t. the selected primary vertex
 
 // system includes
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -53,71 +57,65 @@
 #include "ScoutingDQMUtils.h"
 
 // ---------------------------------------------------------------------------
-// Helper: Lorentz vector from scouting muon
+// Helpers
 // ---------------------------------------------------------------------------
 namespace {
   inline math::PtEtaPhiMLorentzVector muonP4(const Run3ScoutingMuon& mu) {
     return math::PtEtaPhiMLorentzVector(mu.pt(), mu.eta(), mu.phi(), scoutingDQMUtils::MUON_MASS);
   }
 
-  // Vertex position uncertainty in 2D (xy) using diagonal errors only.
-  // If the newer covariance accessors are available (xyCov etc.) they should
-  // be used instead; we fall back to quadratic sum of xError/yError here for
-  // maximum compatibility.
-  inline double vtxDistXY(float svX,
-                          float svY,
-                          float pvX,
-                          float pvY,
-                          float svXErr,
-                          float svYErr,
-                          float pvXErr,
-                          float pvYErr,
-                          double& dist,
-                          double& distErr) {
-    const double dx = svX - pvX;
-    const double dy = svY - pvY;
+  // Sum of the position covariance matrices of two vertices, (x, y, z) ordering.
+  struct Cov3 {
+    double xx, yy, zz, xy, xz, yz;
+  };
+
+  inline Cov3 sumCov(const Run3ScoutingVertex& a, const Run3ScoutingVertex& b) {
+    return {a.xError() * a.xError() + b.xError() * b.xError(),
+            a.yError() * a.yError() + b.yError() * b.yError(),
+            a.zError() * a.zError() + b.zError() * b.zError(),
+            static_cast<double>(a.xyCov()) + b.xyCov(),
+            static_cast<double>(a.xzCov()) + b.xzCov(),
+            static_cast<double>(a.yzCov()) + b.yzCov()};
+  }
+
+  // Transverse distance between two vertices and its uncertainty,
+  // sigma^2 = d^T C d / |d|^2 with C the sum of the two covariance matrices.
+  inline void vtxDistXY(const Run3ScoutingVertex& sv, const Run3ScoutingVertex& pv, double& dist, double& distErr) {
+    const double dx = sv.x() - pv.x();
+    const double dy = sv.y() - pv.y();
+    const Cov3 c = sumCov(sv, pv);
     dist = std::sqrt(dx * dx + dy * dy);
-    // Propagated uncertainty (ignoring off-diagonal covariance)
-    if (dist > 0.) {
-      distErr =
-          std::sqrt((dx * dx * (svXErr * svXErr + pvXErr * pvXErr) + dy * dy * (svYErr * svYErr + pvYErr * pvYErr)) /
-                    (dist * dist));
-    } else {
-      distErr = 0.;
-    }
-    return dist;
+    const double var = dx * dx * c.xx + dy * dy * c.yy + 2. * dx * dy * c.xy;
+    distErr = (dist > 0. && var > 0.) ? std::sqrt(var) / dist : 0.;
   }
 
-  inline double vtxDist3D(float svX,
-                          float svY,
-                          float svZ,
-                          float pvX,
-                          float pvY,
-                          float pvZ,
-                          float svXErr,
-                          float svYErr,
-                          float svZErr,
-                          float pvXErr,
-                          float pvYErr,
-                          float pvZErr,
-                          double& dist,
-                          double& distErr) {
-    const double dx = svX - pvX;
-    const double dy = svY - pvY;
-    const double dz = svZ - pvZ;
+  // Same in 3D.
+  inline void vtxDist3D(const Run3ScoutingVertex& sv, const Run3ScoutingVertex& pv, double& dist, double& distErr) {
+    const double dx = sv.x() - pv.x();
+    const double dy = sv.y() - pv.y();
+    const double dz = sv.z() - pv.z();
+    const Cov3 c = sumCov(sv, pv);
     dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-    if (dist > 0.) {
-      distErr =
-          std::sqrt((dx * dx * (svXErr * svXErr + pvXErr * pvXErr) + dy * dy * (svYErr * svYErr + pvYErr * pvYErr) +
-                     dz * dz * (svZErr * svZErr + pvZErr * pvZErr)) /
-                    (dist * dist));
-    } else {
-      distErr = 0.;
-    }
-    return dist;
+    const double var =
+        dx * dx * c.xx + dy * dy * c.yy + dz * dz * c.zz + 2. * (dx * dy * c.xy + dx * dz * c.xz + dy * dz * c.yz);
+    distErr = (dist > 0. && var > 0.) ? std::sqrt(var) / dist : 0.;
   }
 
-  // Unit-safe cm → μm conversion factor
+  // Track impact parameters w.r.t. a point, as reco::TrackBase::dxy(point) / dz(point).
+  // Run3ScoutingMuon::trk_dxy() / trk_dz() are computed w.r.t. (0,0,0), so they are
+  // recomputed here from the stored reference point and momentum direction.
+  inline double trkDxy(const Run3ScoutingMuon& mu, const Run3ScoutingVertex& pv) {
+    return -(mu.trk_vx() - pv.x()) * std::sin(mu.trk_phi()) + (mu.trk_vy() - pv.y()) * std::cos(mu.trk_phi());
+  }
+
+  inline double trkDz(const Run3ScoutingMuon& mu, const Run3ScoutingVertex& pv) {
+    const double cosPhi = std::cos(mu.trk_phi());
+    const double sinPhi = std::sin(mu.trk_phi());
+    const double pzOverPt = std::sinh(mu.trk_eta());
+    return (mu.trk_vz() - pv.z()) - ((mu.trk_vx() - pv.x()) * cosPhi + (mu.trk_vy() - pv.y()) * sinPhi) * pzOverPt;
+  }
+
+  // Unit-safe cm -> um conversion factor
   constexpr double cmToUm = 1.e4;
 }  // namespace
 
@@ -135,6 +133,9 @@ public:
   void analyze(edm::Event const&, edm::EventSetup const&) override;
 
 private:
+  const Run3ScoutingVertex* findClosestVertex(const Run3ScoutingVertex& sv,
+                                              const Run3ScoutingVertexCollection& vertices) const;
+
   // ---- configuration -------------------------------------------------------
   const std::string folderName_;
   const std::string decayMotherName_;
@@ -147,9 +148,10 @@ private:
   const double minPt_;
   const double maxEta_;
 
-  // Vertex quality cuts
+  // Vertex selection / quality cuts
+  const bool useClosestVertex_;  // use the PV closest to the di-muon vertex instead of the first one
   const double minVtxProb_;
-  const double maxSVdistXY_;  // μm, cut on PV–SV xy distance
+  const double maxSVdistXY_;  // um, cut on PV-SV xy distance for the pointing-angle histograms
 
   // Input tags / tokens
   const edm::EDGetTokenT<Run3ScoutingMuonCollection> muonToken_;
@@ -163,7 +165,7 @@ private:
   MonitorElement* hSVChi2_{nullptr};
   MonitorElement* hSVNormChi2_{nullptr};
 
-  // PV–SV distance
+  // PV-SV distance
   MonitorElement* hSVDistXY_{nullptr};
   MonitorElement* hSVDistXYErr_{nullptr};
   MonitorElement* hSVDistXYSig_{nullptr};
@@ -172,8 +174,8 @@ private:
   MonitorElement* hSVDist3DSig_{nullptr};
 
   // Pointing angle
-  MonitorElement* hCosPhi_{nullptr};    // cos φ in xy
-  MonitorElement* hCosPhi3D_{nullptr};  // cos φ in 3D
+  MonitorElement* hCosPhi_{nullptr};    // cos phi in xy
+  MonitorElement* hCosPhi3D_{nullptr};  // cos phi in 3D
   MonitorElement* hCosPhiInv_{nullptr};
   MonitorElement* hCosPhiInv3D_{nullptr};
   MonitorElement* hCosPhiUnbalance_{nullptr};
@@ -202,6 +204,7 @@ ScoutingDiMuonVertexMonitor::ScoutingDiMuonVertexMonitor(const edm::ParameterSet
       applyMuonID_(iConfig.getParameter<bool>("applyMuonID")),
       minPt_(iConfig.getParameter<double>("minMuonPt")),
       maxEta_(iConfig.getParameter<double>("maxMuonEta")),
+      useClosestVertex_(iConfig.getParameter<bool>("useClosestVertex")),
       minVtxProb_(iConfig.getParameter<double>("minVtxProb")),
       maxSVdistXY_(iConfig.getParameter<double>("maxSVdistXY")),
       muonToken_(consumes<Run3ScoutingMuonCollection>(iConfig.getParameter<edm::InputTag>("muons"))),
@@ -236,28 +239,27 @@ void ScoutingDiMuonVertexMonitor::bookHistograms(DQMStore::IBooker& iBooker, edm
   // ---- vertex quality ----
   hSVProb_ = iBooker.book1D("VtxProb", ";" + motName + " vertex probability;" + ps, 100, 0., 1.);
 
-  hSVChi2_ = iBooker.book1D(
-      "VtxChi2", ";#chi^{2} of the " + motName + " vertex;#chi^{2} of the " + motName + " vertex;" + ps, 200, 0., 200.);
+  hSVChi2_ = iBooker.book1D("VtxChi2", ";#chi^{2} of the " + motName + " vertex;" + ps, 200, 0., 200.);
 
   hSVNormChi2_ = iBooker.book1D("VtxNormChi2", ";#chi^{2}/ndof of the " + motName + " vertex;" + ps, 100, 0., 20.);
 
-  // ---- PV–SV distance xy ----
+  // ---- PV-SV distance xy ----
   hSVDistXY_ = iBooker.book1D("VtxDistXY", histTit + ";PV-" + motName + "V xy distance [#mum];" + ps, 100, 0., 300.);
 
   hSVDistXYErr_ =
       iBooker.book1D("VtxDistXYErr", histTit + ";PV-" + motName + "V xy distance error [#mum];" + ps, 100, 0., 1000.);
 
   hSVDistXYSig_ =
-      iBooker.book1D("VtxDistXYSig", histTit + ";PV-" + motName + "V xy distance significance;" + ps, 100, 0., 10.);
+      iBooker.book1D("VtxDistXYSig", histTit + ";PV-" + motName + "V xy distance significance;" + ps, 100, 0., 20.);
 
-  // ---- PV–SV distance 3D ----
-  hSVDist3D_ = iBooker.book1D("VtxDist3D", histTit + ";PV-" + motName + "V 3D distance [#mum];" + ps, 100, 0., 300.);
+  // ---- PV-SV distance 3D ----
+  hSVDist3D_ = iBooker.book1D("VtxDist3D", histTit + ";PV-" + motName + "V 3D distance [#mum];" + ps, 100, 0., 1000.);
 
   hSVDist3DErr_ =
       iBooker.book1D("VtxDist3DErr", histTit + ";PV-" + motName + "V 3D distance error [#mum];" + ps, 100, 0., 1000.);
 
   hSVDist3DSig_ =
-      iBooker.book1D("VtxDist3DSig", histTit + ";PV-" + motName + "V 3D distance significance;" + ps, 100, 0., 10.);
+      iBooker.book1D("VtxDist3DSig", histTit + ";PV-" + motName + "V 3D distance significance;" + ps, 100, 0., 20.);
 
   // ---- pointing angle ----
   hCosPhi_ = iBooker.book1D("CosPhi", histTit + ";cos(#phi_{xy});" + ps, 50, -1., 1.);
@@ -292,6 +294,28 @@ void ScoutingDiMuonVertexMonitor::bookHistograms(DQMStore::IBooker& iBooker, edm
 }
 
 // ---------------------------------------------------------------------------
+// Primary vertex closest (in 3D) to the di-muon vertex
+// ---------------------------------------------------------------------------
+const Run3ScoutingVertex* ScoutingDiMuonVertexMonitor::findClosestVertex(
+    const Run3ScoutingVertex& sv, const Run3ScoutingVertexCollection& vertices) const {
+  const Run3ScoutingVertex* closest = nullptr;
+  double minDist2 = std::numeric_limits<double>::max();
+  for (const auto& pv : vertices) {
+    if (!pv.isValidVtx())
+      continue;
+    const double dx = sv.x() - pv.x();
+    const double dy = sv.y() - pv.y();
+    const double dz = sv.z() - pv.z();
+    const double d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 < minDist2) {
+      minDist2 = d2;
+      closest = &pv;
+    }
+  }
+  return closest;
+}
+
+// ---------------------------------------------------------------------------
 // analyze
 // ---------------------------------------------------------------------------
 void ScoutingDiMuonVertexMonitor::analyze(edm::Event const& iEvent, edm::EventSetup const&) {
@@ -310,7 +334,6 @@ void ScoutingDiMuonVertexMonitor::analyze(edm::Event const& iEvent, edm::EventSe
     edm::LogWarning("ScoutingDiMuonVertexMonitor") << "No primary vertices found; skipping event.";
     return;
   }
-  const Run3ScoutingVertex& pv = pvHandle->front();  // use the first (hardest) PV
 
   // ---- Secondary vertex collection (di-muon) ----
   edm::Handle<Run3ScoutingVertexCollection> svHandle;
@@ -319,8 +342,9 @@ void ScoutingDiMuonVertexMonitor::analyze(edm::Event const& iEvent, edm::EventSe
     edm::LogWarning("ScoutingDiMuonVertexMonitor") << "Invalid secondary vertex collection handle.";
     return;
   }
+  const auto& svs = *svHandle;
 
-  hNSV_->Fill(static_cast<double>(svHandle->size()));
+  hNSV_->Fill(static_cast<double>(svs.size()));
 
   // ---- Muon selection ----
   std::vector<size_t> selectedMuons;
@@ -341,21 +365,10 @@ void ScoutingDiMuonVertexMonitor::analyze(edm::Event const& iEvent, edm::EventSe
   if (selectedMuons.size() < 2)
     return;
 
-  // ---- Loop over di-muon secondary vertices ----
-  // Each SV in the displaced-vertex collection corresponds to a di-muon pair.
-  // We pick the two muons (closest in ΔR to the SV flight direction) that form
-  // an opposite-sign pair.  When no per-SV muon index map is available (the
-  // scouting format does not store it), we fall back to the globally selected
-  // muon pair with the smallest |Δm – m_SV|, i.e. all pairs are tried and the
-  // best-matching one is chosen.
-  //
-  // For simplicity and maximum compatibility we adopt the safe approach:
-  // iterate over all OS muon pairs, reconstruct their kinematics, and then
-  // look for a matching SV (closest in 3D position to the di-muon flight path).
-  // If no dedicated SV collection is provided (svToken points to an empty
-  // collection) the pair still contributes to kinematic histograms via the
-  // primary-vertex information only.
+  // muons whose impact parameters have already been filled in this event
+  std::vector<bool> ipFilled(muonHandle->size(), false);
 
+  // ---- Loop over opposite-sign muon pairs ----
   for (size_t ii = 0; ii < selectedMuons.size(); ++ii) {
     for (size_t jj = ii + 1; jj < selectedMuons.size(); ++jj) {
       const auto& mu_i = (*muonHandle)[selectedMuons[ii]];
@@ -365,93 +378,72 @@ void ScoutingDiMuonVertexMonitor::analyze(edm::Event const& iEvent, edm::EventSe
       if (mu_i.charge() * mu_j.charge() >= 0)
         continue;
 
-      // Invariant mass
+      // Invariant mass (all opposite-sign pairs), then the mass window of the decay mother
       const auto p4pair = muonP4(mu_i) + muonP4(mu_j);
       const double mass = p4pair.mass();
       hInvMass_->Fill(mass);
+      if (mass < massLimits_.first || mass > massLimits_.second)
+        continue;
 
-      // Di-muon momentum direction
-      const double pxDimu = p4pair.px();
-      const double pyDimu = p4pair.py();
-      const double pzDimu = p4pair.pz();
-
-      // ---- Per-muon impact parameters w.r.t. PV ----
-      // Run3ScoutingMuon stores trk_dxy and trk_dz computed w.r.t. the
-      // beamspot / PV at HLT.  We use them directly.
-      for (const auto* muPtr : {&mu_i, &mu_j}) {
-        hTrkDxy_->Fill(muPtr->trk_dxy() * cmToUm);
-        hTrkDz_->Fill(muPtr->trk_dz() * cmToUm);
-        hTrkDxyErr_->Fill(muPtr->trk_dxyError() * cmToUm);
-        hTrkDzErr_->Fill(muPtr->trk_dzError() * cmToUm);
-      }
-
-      // ---- Find best matching secondary vertex ----
-      // Strategy: among all SVs, pick the one with the minimum 3D distance
-      // to the midpoint of the two muon "reference point" vectors.
-      // As a proxy we use the SV position directly; the scouting displaced
-      // vertex collection is typically pre-matched to muon pairs by the HLT.
+      // ---- Di-muon vertex fitted at HLT for this pair ----
+      // Run3ScoutingMuon::vtxIndx() holds the indices, in the displaced-vertex
+      // collection, of the vertices the muon belongs to: the pair's vertex is a
+      // common index of the two muons (the most probable one if there are several).
       const Run3ScoutingVertex* bestSV = nullptr;
-      double minSVdist = 1e9;
-      for (const auto& sv : *svHandle) {
+      double bestProb = -1.;
+      for (const int idx : mu_i.vtxIndx()) {
+        if (idx < 0 || static_cast<size_t>(idx) >= svs.size())
+          continue;
+        const auto& idxJ = mu_j.vtxIndx();
+        if (std::find(idxJ.begin(), idxJ.end(), idx) == idxJ.end())
+          continue;
+        const auto& sv = svs[idx];
         if (!sv.isValidVtx())
           continue;
-        const double dx = sv.x() - pv.x();
-        const double dy = sv.y() - pv.y();
-        const double dz = sv.z() - pv.z();
-        const double d = std::sqrt(dx * dx + dy * dy + dz * dz);
-        if (d < minSVdist) {
-          minSVdist = d;
+        const double prob = (sv.ndof() > 0) ? TMath::Prob(sv.chi2(), sv.ndof()) : 0.;
+        if (prob > bestProb) {
+          bestProb = prob;
           bestSV = &sv;
         }
       }
 
       if (bestSV == nullptr)
-        continue;  // no SV available for this pair
+        continue;  // no vertex fitted for this pair
 
-      // ---- Vertex probability and χ² ----
+      // ---- Vertex probability and chi2 ----
       const double chi2 = bestSV->chi2();
       const int ndof = bestSV->ndof();
-      const double prob = (ndof > 0) ? TMath::Prob(chi2, ndof) : 0.;
 
-      hSVProb_->Fill(prob);
+      hSVProb_->Fill(bestProb);
       hSVChi2_->Fill(chi2);
       if (ndof > 0)
         hSVNormChi2_->Fill(chi2 / ndof);
 
-      if (prob < minVtxProb_)
+      if (bestProb < minVtxProb_)
         continue;
 
-      // ---- PV–SV distances ----
-      // Use diagonal position errors only (conservative); if the newer
-      // Run3ScoutingVertex with covariance is available, subclasses can
-      // override with more precise error propagation.
+      // ---- Reference primary vertex ----
+      const Run3ScoutingVertex* closestPV = useClosestVertex_ ? findClosestVertex(*bestSV, *pvHandle) : nullptr;
+      const Run3ScoutingVertex& pv = closestPV ? *closestPV : pvHandle->front();
+
+      // ---- Per-muon impact parameters w.r.t. the primary vertex (once per muon) ----
+      for (const size_t k : {selectedMuons[ii], selectedMuons[jj]}) {
+        if (ipFilled[k])
+          continue;
+        ipFilled[k] = true;
+        const auto& mu = (*muonHandle)[k];
+        hTrkDxy_->Fill(trkDxy(mu, pv) * cmToUm);
+        hTrkDz_->Fill(trkDz(mu, pv) * cmToUm);
+        hTrkDxyErr_->Fill(mu.trk_dxyError() * cmToUm);
+        hTrkDzErr_->Fill(mu.trk_dzError() * cmToUm);
+      }
+
+      // ---- PV-SV distances (full covariance of both vertices) ----
       double distXY, distXYErr;
-      vtxDistXY(bestSV->x(),
-                bestSV->y(),
-                pv.x(),
-                pv.y(),
-                bestSV->xError(),
-                bestSV->yError(),
-                pv.xError(),
-                pv.yError(),
-                distXY,
-                distXYErr);
+      vtxDistXY(*bestSV, pv, distXY, distXYErr);
 
       double dist3D, dist3DErr;
-      vtxDist3D(bestSV->x(),
-                bestSV->y(),
-                bestSV->z(),
-                pv.x(),
-                pv.y(),
-                pv.z(),
-                bestSV->xError(),
-                bestSV->yError(),
-                bestSV->zError(),
-                pv.xError(),
-                pv.yError(),
-                pv.zError(),
-                dist3D,
-                dist3DErr);
+      vtxDist3D(*bestSV, pv, dist3D, dist3DErr);
 
       hSVDistXY_->Fill(distXY * cmToUm);
       hSVDistXYErr_->Fill(distXYErr * cmToUm);
@@ -463,18 +455,25 @@ void ScoutingDiMuonVertexMonitor::analyze(edm::Event const& iEvent, edm::EventSe
       if (dist3DErr > 0.)
         hSVDist3DSig_->Fill(dist3D / dist3DErr);
 
-      // ---- Pointing angles ----
-      // Displacement vector PV → SV
+      // ---- Pointing angles, for vertices close to the PV (as in DiMuonVertexMonitor) ----
+      if (distXY * cmToUm > maxSVdistXY_)
+        continue;
+
+      // Displacement vector PV -> SV
       const double dVtxX = bestSV->x() - pv.x();
       const double dVtxY = bestSV->y() - pv.y();
       const double dVtxZ = bestSV->z() - pv.z();
 
-      // cos φ in xy plane
+      const double pxDimu = p4pair.px();
+      const double pyDimu = p4pair.py();
+      const double pzDimu = p4pair.pz();
+
       const double magPtDimu = std::sqrt(pxDimu * pxDimu + pyDimu * pyDimu);
       const double magDVtxXY = std::sqrt(dVtxX * dVtxX + dVtxY * dVtxY);
       const double magPDimu = std::sqrt(pxDimu * pxDimu + pyDimu * pyDimu + pzDimu * pzDimu);
       const double magDVtx3D = std::sqrt(dVtxX * dVtxX + dVtxY * dVtxY + dVtxZ * dVtxZ);
 
+      // cos phi in the xy plane
       if (magPtDimu > 0. && magDVtxXY > 0.) {
         const double cosphi = (pxDimu * dVtxX + pyDimu * dVtxY) / (magPtDimu * magDVtxXY);
         hCosPhi_->Fill(cosphi);
@@ -483,6 +482,7 @@ void ScoutingDiMuonVertexMonitor::analyze(edm::Event const& iEvent, edm::EventSe
         hCosPhiUnbalance_->Fill(-cosphi, -1.);
       }
 
+      // cos phi in 3D
       if (magPDimu > 0. && magDVtx3D > 0.) {
         const double cosphi3D = (pxDimu * dVtxX + pyDimu * dVtxY + pzDimu * dVtxZ) / (magPDimu * magDVtx3D);
         hCosPhi3D_->Fill(cosphi3D);
@@ -490,12 +490,6 @@ void ScoutingDiMuonVertexMonitor::analyze(edm::Event const& iEvent, edm::EventSe
         hCosPhi3DUnbalance_->Fill(cosphi3D, 1.);
         hCosPhi3DUnbalance_->Fill(-cosphi3D, -1.);
       }
-
-      // ---- Distance cut ----
-      if (distXY * cmToUm > maxSVdistXY_)
-        continue;
-
-      // Additional per-pair histograms after distance cut can be added here.
     }
   }
 }
@@ -516,8 +510,10 @@ void ScoutingDiMuonVertexMonitor::fillDescriptions(edm::ConfigurationDescription
   desc.add<bool>("applyMuonID", true);
   desc.add<double>("minMuonPt", 3.0);
   desc.add<double>("maxMuonEta", 2.4);
+  desc.add<bool>("useClosestVertex", true)
+      ->setComment("use the primary vertex closest to the di-muon vertex instead of the first one");
   desc.add<double>("minVtxProb", 0.005);
-  desc.add<double>("maxSVdistXY", 50.0);  // μm
+  desc.add<double>("maxSVdistXY", 50.0)->setComment("um, max PV-SV xy distance for the pointing-angle histograms");
 
   descriptions.addWithDefaultLabel(desc);
 }
