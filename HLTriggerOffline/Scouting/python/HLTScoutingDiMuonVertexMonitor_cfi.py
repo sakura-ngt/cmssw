@@ -12,3 +12,8 @@ ScoutingDiMuonVertexMonitor = DQMEDAnalyzer("ScoutingDiMuonVertexMonitor",
                                             maxMuonEta = cms.double(2.4),
                                             minVtxProb = cms.double(0.005),
                                             maxSVdistXY = cms.double(50))
+
+# Same monitor for the muons reconstructed without vertex constraint and their di-muon vertices
+ScoutingDiMuonVertexMonitorNoVtx = ScoutingDiMuonVertexMonitor.clone(FolderName = 'HLT/ScoutingOffline/DiMuonNoVtx',
+                                                                     muons = 'hltScoutingMuonPackerNoVtx',
+                                                                     secondaryVertices = ('hltScoutingMuonPackerNoVtx', 'displacedVtx'))

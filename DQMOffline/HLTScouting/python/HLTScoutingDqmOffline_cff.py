@@ -60,6 +60,7 @@ hltScoutingCollectionMonitor = cms.Sequence(scoutingCollectionMonitor)
 hltScoutingDileptonMonitor = cms.Sequence(ScoutingDileptonMonitor)
 hltScoutingPi0Monitor = cms.Sequence(ScoutingPi0Monitor)
 hltScoutingDiMuonVertexMonitor = cms.Sequence(ScoutingDiMuonVertexMonitor)
+hltScoutingDiMuonVertexMonitorNoVtx = cms.Sequence(ScoutingDiMuonVertexMonitorNoVtx)
 
 hltDqmOnlyScouting = cms.Sequence(recoTrackFromScoutingMonitorSequence +
                                   hltScoutingTrackMonitor +
@@ -69,6 +70,7 @@ hltDqmOnlyScouting = cms.Sequence(recoTrackFromScoutingMonitorSequence +
                                   ScoutingDiMuonAlignmentMonitor +
                                   ScoutingDiMuonAlignmentMonitorJpsi +
                                   hltScoutingDiMuonVertexMonitor +
+                                  hltScoutingDiMuonVertexMonitorNoVtx +
                                   hltScoutingPi0Monitor +
                                   jetPreDQMSeqScouting +
                                   dqmAk4PFScoutingL1FastL2L3ResidualCorrector +

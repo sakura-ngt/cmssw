@@ -23,6 +23,10 @@
 //     * cos(phi) (xy and 3D) between the di-muon momentum and the PV->SV
 //       displacement, for pairs with PV-SV xy distance below maxSVdistXY
 //     * Per-muon track d_xy and d_z w.r.t. the selected primary vertex
+//   Independently of the pair selection, the positions of all valid di-muon
+//   vertices of the event are histogrammed in the lab frame (x vs y, and signed
+//   r = sign(y) sqrt(x^2 + y^2) vs z), over the whole tracker and zoomed on the
+//   beam pipe / pixel region.
 
 // system includes
 #include <algorithm>
@@ -193,6 +197,12 @@ private:
   // Number of muons and vertices per event (diagnostic)
   MonitorElement* hNMuons_{nullptr};
   MonitorElement* hNSV_{nullptr};
+
+  // Di-muon vertex positions (all valid vertices of the event)
+  MonitorElement* hSVXvsY_{nullptr};
+  MonitorElement* hSVRvsZ_{nullptr};
+  MonitorElement* hSVXvsYZoom_{nullptr};
+  MonitorElement* hSVRvsZZoom_{nullptr};
 };
 
 // ---------------------------------------------------------------------------
@@ -291,6 +301,30 @@ void ScoutingDiMuonVertexMonitor::bookHistograms(DQMStore::IBooker& iBooker, edm
   // ---- diagnostics ----
   hNMuons_ = iBooker.book1D("NMuons", ";Number of selected muons;Events", 20, 0., 20.);
   hNSV_ = iBooker.book1D("NSV", ";Number of di-muon secondary vertices;Events", 20, 0., 20.);
+
+  // ---- di-muon vertex positions (lab frame, cm) ----
+  const std::string vtxTit = "all di-muon vertices";
+  hSVXvsY_ = iBooker.book2D(
+      "VtxXvsY", vtxTit + ";di-muon vertex x [cm];di-muon vertex y [cm]", 220, -110., 110., 220, -110., 110.);
+  hSVRvsZ_ = iBooker.book2D("VtxRvsZ",
+                            vtxTit + ";di-muon vertex z [cm];di-muon vertex signed r = sign(y)#sqrt{x^{2}+y^{2}} [cm]",
+                            260,
+                            -130.,
+                            130.,
+                            220,
+                            -110.,
+                            110.);
+  hSVXvsYZoom_ = iBooker.book2D(
+      "VtxXvsY_zoom", vtxTit + ";di-muon vertex x [cm];di-muon vertex y [cm]", 200, -20., 20., 200, -20., 20.);
+  hSVRvsZZoom_ =
+      iBooker.book2D("VtxRvsZ_zoom",
+                     vtxTit + ";di-muon vertex z [cm];di-muon vertex signed r = sign(y)#sqrt{x^{2}+y^{2}} [cm]",
+                     200,
+                     -40.,
+                     40.,
+                     200,
+                     -20.,
+                     20.);
 }
 
 // ---------------------------------------------------------------------------
@@ -345,6 +379,17 @@ void ScoutingDiMuonVertexMonitor::analyze(edm::Event const& iEvent, edm::EventSe
   const auto& svs = *svHandle;
 
   hNSV_->Fill(static_cast<double>(svs.size()));
+
+  // ---- Positions of all valid di-muon vertices (independent of the pair selection) ----
+  for (const auto& sv : svs) {
+    if (!sv.isValidVtx())
+      continue;
+    const double r = std::copysign(std::hypot(sv.x(), sv.y()), sv.y());
+    hSVXvsY_->Fill(sv.x(), sv.y());
+    hSVRvsZ_->Fill(sv.z(), r);
+    hSVXvsYZoom_->Fill(sv.x(), sv.y());
+    hSVRvsZZoom_->Fill(sv.z(), r);
+  }
 
   // ---- Muon selection ----
   std::vector<size_t> selectedMuons;
