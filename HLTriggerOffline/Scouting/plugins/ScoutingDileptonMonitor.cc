@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 // user includes
@@ -40,22 +41,37 @@ namespace scouting {
   // Muon: charge is a direct member
   inline int chargeMu(const Run3ScoutingMuon& mu) { return mu.charge(); }
 
-  // Electron: charge lives in the track vector; use ValueMap for best-track index when available
-  inline int chargeEl(const Run3ScoutingElectron& el,
-                      const edm::ValueMap<int>* vmBestIdx,
-                      size_t collectionIndex,
-                      const edm::Handle<Run3ScoutingElectronCollection>& handle) {
+  // Electron: index of the GSF track associated to the electron, -1 if there is none.
+  // Use the ValueMap for the best-track index when available, otherwise the first track.
+  inline int bestTrackIdxEl(const Run3ScoutingElectron& el,
+                            const edm::ValueMap<int>* vmBestIdx,
+                            size_t collectionIndex,
+                            const edm::Handle<Run3ScoutingElectronCollection>& handle) {
     if (vmBestIdx) {
       edm::Ref<Run3ScoutingElectronCollection> ref(handle, collectionIndex);
-      int idx = (*vmBestIdx)[ref];
-      return el.trkcharge()[idx];
+      return (*vmBestIdx)[ref];
     }
-    return el.trkcharge()[0];
+    return el.trkpt().empty() ? -1 : 0;
   }
 
   template <typename T>
   math::PtEtaPhiMLorentzVector p4(const T& obj, double mass) {
     return math::PtEtaPhiMLorentzVector(obj.pt(), obj.eta(), obj.phi(), mass);
+  }
+
+  // Electron: Run3ScoutingElectron::eta()/phi() give the supercluster position, which for low-pT
+  // electrons is far from the direction at the vertex (dphi ~ 0.74/pT[GeV] at the ECAL barrel face).
+  // Keep the SC energy and take the direction from the GSF track at the vertex.
+  inline math::PtEtaPhiMLorentzVector p4El(const Run3ScoutingElectron& el, int trkIdx, bool useTrackDirection) {
+    if (!useTrackDirection)
+      return p4(el, scoutingDQMUtils::ELECTRON_MASS);
+    const double energy = el.pt() * std::cosh(el.eta());
+    const double eta = el.trketa()[trkIdx];
+    return math::PtEtaPhiMLorentzVector(
+        scoutingDQMUtils::computePtFromEnergyMassEta(energy, scoutingDQMUtils::ELECTRON_MASS, eta),
+        eta,
+        el.trkphi()[trkIdx],
+        scoutingDQMUtils::ELECTRON_MASS);
   }
 
 }  // namespace scouting
@@ -131,6 +147,7 @@ private:
   const StringCutObjectSelector<Run3ScoutingElectron> electronCut_;
   MassHistos electronHistos_;
   const bool electronID_;
+  const bool useElectronTrackDirection_;
 };
 
 // ---------------------------------------------------------------------------
@@ -156,7 +173,8 @@ ScoutingDileptonMonitor::ScoutingDileptonMonitor(const edm::ParameterSet& iConfi
       electronToken_(consumes<std::vector<Run3ScoutingElectron>>(iConfig.getParameter<edm::InputTag>("electrons"))),
       vmBestTrackIndexToken_(consumes<edm::ValueMap<int>>(iConfig.getParameter<edm::InputTag>("vmBestTrackIndex"))),
       electronCut_(iConfig.getParameter<std::string>("electronCut")),
-      electronID_(iConfig.getParameter<bool>("electronID")) {}
+      electronID_(iConfig.getParameter<bool>("electronID")),
+      useElectronTrackDirection_(iConfig.getParameter<bool>("useElectronTrackDirection")) {}
 
 // ---------------------------------------------------------------------------
 // bookHistograms
@@ -285,23 +303,30 @@ void ScoutingDileptonMonitor::fillPairs(const std::vector<size_t>& indices,
                                         const edm::ValueMap<int>* vmBestIdx,
                                         MassHistos& histos,
                                         bool doEtaSplit) {
-  const size_t n = indices.size();
+  // keep only electrons with an associated track: needed for the charge and the direction
+  std::vector<std::pair<size_t, int>> withTrack;  // (collection index, best track index)
+  withTrack.reserve(indices.size());
+  for (const size_t idx : indices) {
+    const int trkIdx = scouting::bestTrackIdxEl((*handle)[idx], vmBestIdx, idx, handle);
+    if (trkIdx >= 0)
+      withTrack.emplace_back(idx, trkIdx);
+  }
+
+  const size_t n = withTrack.size();
   edm::LogInfo("ScoutingDileptonMonitor") << "electron lepton size: " << n;
 
   for (size_t ii = 0; ii < n; ++ii) {
     for (size_t jj = ii + 1; jj < n; ++jj) {
-      const size_t idx_i = indices[ii];
-      const size_t idx_j = indices[jj];
+      const auto [idx_i, trk_i] = withTrack[ii];
+      const auto [idx_j, trk_j] = withTrack[jj];
       const auto& el_i = (*handle)[idx_i];
       const auto& el_j = (*handle)[idx_j];
 
-      const int q_i = scouting::chargeEl(el_i, vmBestIdx, idx_i, handle);
-      const int q_j = scouting::chargeEl(el_j, vmBestIdx, idx_j, handle);
-      if (q_i * q_j >= 0)
+      if (el_i.trkcharge()[trk_i] * el_j.trkcharge()[trk_j] >= 0)
         continue;
 
-      const auto p4 =
-          scouting::p4(el_i, scoutingDQMUtils::ELECTRON_MASS) + scouting::p4(el_j, scoutingDQMUtils::ELECTRON_MASS);
+      const auto p4 = scouting::p4El(el_i, trk_i, useElectronTrackDirection_) +
+                      scouting::p4El(el_j, trk_j, useElectronTrackDirection_);
       const double mass = p4.mass();
 
       histos.full->Fill(mass);
@@ -343,6 +368,8 @@ void ScoutingDileptonMonitor::fillDescriptions(edm::ConfigurationDescriptions& d
   desc.add<double>("barrelEta", 1.479);
   desc.add<bool>("muonID", true);
   desc.add<bool>("electronID", true);
+  desc.add<bool>("useElectronTrackDirection", true)
+      ->setComment("electron eta/phi from the best GSF track instead of the supercluster position");
   descriptions.addWithDefaultLabel(desc);
 }
 

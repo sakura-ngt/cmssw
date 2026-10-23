@@ -18,4 +18,5 @@ ScoutingDileptonMonitor = DQMEDAnalyzer("ScoutingDileptonMonitor",
                                         zMassMax = cms.double(110.0),
                                         barrelEta = cms.double(1.479),
                                         muonID = cms.bool(True),
-                                        electronID = cms.bool(True))
+                                        electronID = cms.bool(True),
+                                        useElectronTrackDirection = cms.bool(True)) # eta/phi from the GSF track, not the SC
