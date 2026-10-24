@@ -1,6 +1,8 @@
 // system includes
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <format>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -238,23 +240,20 @@ void ScoutingDileptonMonitor::bookHistograms(DQMStore::IBooker& ibooker, edm::Ru
   if (doElectrons_ && doJpsiElectrons_) {
     const std::string name = "electronsJpsi";
     auto& h = jpsiElectronHistos_;
-    h.lowMass = ibooker.book1D(name + "_lowMass",
-                               name + " opposite-charge leading pair;M [GeV];Events",
-                               jpsiEleLowMassBins_,
-                               0.,
-                               jpsiEleLowMassMax_);
-    h.lowMassEBEB = ibooker.book1D(name + "_lowMassEBEB",
-                                   name + " opposite-charge leading pair, EB-EB;M [GeV];Events",
-                                   jpsiEleLowMassBins_,
-                                   0.,
-                                   jpsiEleLowMassMax_);
-    h.jpsiMass = ibooker.book1D(
-        name + "_jpsiMass", name + " J/Psi window;M [GeV];Events", jpsiEleMassBins_, jpsiEleMassMin_, jpsiEleMassMax_);
-    h.jpsiMassEBEB = ibooker.book1D(name + "_jpsiMassEBEB",
-                                    name + " J/Psi window, EB-EB;M [GeV];Events",
-                                    jpsiEleMassBins_,
-                                    jpsiEleMassMin_,
-                                    jpsiEleMassMax_);
+    // ROOT TLatex titles; y axis carries the bin width
+    auto bookMass = [&](const std::string& suffix, const std::string& title, int bins, double min, double max) {
+      const std::string axes =
+          std::format(";M_{{e^{{+}}e^{{-}}}} [GeV];Events / {:g} GeV", std::round((max - min) / bins * 1e4) / 1e4);
+      return ibooker.book1D(name + suffix, title + axes, bins, min, max);
+    };
+    const std::string pairTitle = "Scouting e^{+}e^{-}, leading opposite-charge pair";
+    const std::string jpsiTitle = "Scouting J/#psi #rightarrow e^{+}e^{-}";
+    const std::string ebebTitle = " (both e in ECAL barrel)";
+    h.lowMass = bookMass("_lowMass", pairTitle, jpsiEleLowMassBins_, 0., jpsiEleLowMassMax_);
+    h.lowMassEBEB = bookMass("_lowMassEBEB", pairTitle + ebebTitle, jpsiEleLowMassBins_, 0., jpsiEleLowMassMax_);
+    h.jpsiMass = bookMass("_jpsiMass", jpsiTitle, jpsiEleMassBins_, jpsiEleMassMin_, jpsiEleMassMax_);
+    h.jpsiMassEBEB =
+        bookMass("_jpsiMassEBEB", jpsiTitle + ebebTitle, jpsiEleMassBins_, jpsiEleMassMin_, jpsiEleMassMax_);
   }
 }
 
