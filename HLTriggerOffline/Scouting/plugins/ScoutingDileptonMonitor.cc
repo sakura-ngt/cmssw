@@ -1,4 +1,5 @@
 // system includes
+#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <type_traits>
@@ -11,10 +12,12 @@
 #include "DQMServices/Core/interface/DQMStore.h"
 #include "DataFormats/Common/interface/Ref.h"
 #include "DataFormats/Common/interface/Handle.h"
+#include "DataFormats/Common/interface/TriggerResults.h"
 #include "DataFormats/Common/interface/ValueMap.h"
 #include "DataFormats/Math/interface/LorentzVector.h"
 #include "DataFormats/Scouting/interface/Run3ScoutingElectron.h"
 #include "DataFormats/Scouting/interface/Run3ScoutingMuon.h"
+#include "FWCore/Common/interface/TriggerNames.h"
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
@@ -59,19 +62,15 @@ namespace scouting {
     return math::PtEtaPhiMLorentzVector(obj.pt(), obj.eta(), obj.phi(), mass);
   }
 
-  // Electron: Run3ScoutingElectron::eta()/phi() give the supercluster position, which for low-pT
-  // electrons is far from the direction at the vertex (dphi ~ 0.74/pT[GeV] at the ECAL barrel face).
-  // Keep the SC energy and take the direction from the GSF track at the vertex.
-  inline math::PtEtaPhiMLorentzVector p4El(const Run3ScoutingElectron& el, int trkIdx, bool useTrackDirection) {
-    if (!useTrackDirection)
-      return p4(el, scoutingDQMUtils::ELECTRON_MASS);
-    const double energy = el.pt() * std::cosh(el.eta());
-    const double eta = el.trketa()[trkIdx];
-    return math::PtEtaPhiMLorentzVector(
-        scoutingDQMUtils::computePtFromEnergyMassEta(energy, scoutingDQMUtils::ELECTRON_MASS, eta),
-        eta,
-        el.trkphi()[trkIdx],
-        scoutingDQMUtils::ELECTRON_MASS);
+  // Electron for the J/Psi: Run3ScoutingElectron::eta()/phi() give the supercluster position, far from
+  // the direction at the vertex for low-pT electrons. Take the direction from the GSF track (mode
+  // estimates when stored, i.e. from the 2024 format on) and keep the SC pT.
+  inline math::PtEtaPhiMLorentzVector p4ElTrackDirection(const Run3ScoutingElectron& el, size_t trkIdx) {
+    const bool hasMode = !el.trketaMode().empty();
+    return math::PtEtaPhiMLorentzVector(el.pt(),
+                                        hasMode ? el.trketaMode()[trkIdx] : el.trketa()[trkIdx],
+                                        hasMode ? el.trkphiMode()[trkIdx] : el.trkphi()[trkIdx],
+                                        scoutingDQMUtils::ELECTRON_MASS);
   }
 
 }  // namespace scouting
@@ -98,6 +97,13 @@ private:
     MonitorElement* endcap{nullptr};
   };
 
+  struct JpsiHistos {
+    MonitorElement* lowMass{nullptr};
+    MonitorElement* lowMassEBEB{nullptr};
+    MonitorElement* jpsiMass{nullptr};
+    MonitorElement* jpsiMassEBEB{nullptr};
+  };
+
   // ---- helpers ----------------------------------------------------------
   template <typename T>
   void analyzeCollection(const edm::Event&,
@@ -119,6 +125,9 @@ private:
                  const edm::ValueMap<int>* vmBestIdx,
                  MassHistos&,
                  bool doEtaSplit);
+
+  bool passJpsiElectronTrigger(const edm::Event&) const;
+  void analyzeJpsiElectrons(const edm::Event&);
 
   // ---- configuration ----------------------------------------------------
   const std::string outputInternalPath_;
@@ -147,7 +156,20 @@ private:
   const StringCutObjectSelector<Run3ScoutingElectron> electronCut_;
   MassHistos electronHistos_;
   const bool electronID_;
-  const bool useElectronTrackDirection_;
+
+  // ---- J/Psi -> ee (selection of the EGM scouting studies) ----------------
+  const bool doJpsiElectrons_;
+  const edm::EDGetTokenT<double> rhoToken_;
+  const edm::EDGetTokenT<edm::TriggerResults> triggerResultsToken_;
+  const std::vector<std::string> jpsiEleTriggers_;
+  const double jpsiElePtMin_, jpsiEleTrackEtaMax_;
+  const scoutingDQMUtils::ElectronWP jpsiEleWP_;
+  const bool jpsiEleUseIso_;
+  const int jpsiEleLowMassBins_;
+  const double jpsiEleLowMassMax_;
+  const int jpsiEleMassBins_;
+  const double jpsiEleMassMin_, jpsiEleMassMax_;
+  JpsiHistos jpsiElectronHistos_;
 };
 
 // ---------------------------------------------------------------------------
@@ -174,7 +196,19 @@ ScoutingDileptonMonitor::ScoutingDileptonMonitor(const edm::ParameterSet& iConfi
       vmBestTrackIndexToken_(consumes<edm::ValueMap<int>>(iConfig.getParameter<edm::InputTag>("vmBestTrackIndex"))),
       electronCut_(iConfig.getParameter<std::string>("electronCut")),
       electronID_(iConfig.getParameter<bool>("electronID")),
-      useElectronTrackDirection_(iConfig.getParameter<bool>("useElectronTrackDirection")) {}
+      doJpsiElectrons_(iConfig.getParameter<bool>("doJpsiElectrons")),
+      rhoToken_(consumes<double>(iConfig.getParameter<edm::InputTag>("rho"))),
+      triggerResultsToken_(consumes<edm::TriggerResults>(iConfig.getParameter<edm::InputTag>("triggerResults"))),
+      jpsiEleTriggers_(iConfig.getParameter<std::vector<std::string>>("jpsiEleTriggers")),
+      jpsiElePtMin_(iConfig.getParameter<double>("jpsiElePtMin")),
+      jpsiEleTrackEtaMax_(iConfig.getParameter<double>("jpsiEleTrackEtaMax")),
+      jpsiEleWP_(scoutingDQMUtils::electronWPFromString(iConfig.getParameter<std::string>("jpsiEleWP"))),
+      jpsiEleUseIso_(iConfig.getParameter<bool>("jpsiEleUseIso")),
+      jpsiEleLowMassBins_(iConfig.getParameter<int>("jpsiEleLowMassBins")),
+      jpsiEleLowMassMax_(iConfig.getParameter<double>("jpsiEleLowMassMax")),
+      jpsiEleMassBins_(iConfig.getParameter<int>("jpsiEleMassBins")),
+      jpsiEleMassMin_(iConfig.getParameter<double>("jpsiEleMassMin")),
+      jpsiEleMassMax_(iConfig.getParameter<double>("jpsiEleMassMax")) {}
 
 // ---------------------------------------------------------------------------
 // bookHistograms
@@ -200,6 +234,28 @@ void ScoutingDileptonMonitor::bookHistograms(DQMStore::IBooker& ibooker, edm::Ru
     bookSet("muonsNoVtx", muonNoVtxHistos_, true);
   if (doElectrons_)
     bookSet("electrons", electronHistos_, true);
+
+  if (doElectrons_ && doJpsiElectrons_) {
+    const std::string name = "electronsJpsi";
+    auto& h = jpsiElectronHistos_;
+    h.lowMass = ibooker.book1D(name + "_lowMass",
+                               name + " opposite-charge leading pair;M [GeV];Events",
+                               jpsiEleLowMassBins_,
+                               0.,
+                               jpsiEleLowMassMax_);
+    h.lowMassEBEB = ibooker.book1D(name + "_lowMassEBEB",
+                                   name + " opposite-charge leading pair, EB-EB;M [GeV];Events",
+                                   jpsiEleLowMassBins_,
+                                   0.,
+                                   jpsiEleLowMassMax_);
+    h.jpsiMass = ibooker.book1D(
+        name + "_jpsiMass", name + " J/Psi window;M [GeV];Events", jpsiEleMassBins_, jpsiEleMassMin_, jpsiEleMassMax_);
+    h.jpsiMassEBEB = ibooker.book1D(name + "_jpsiMassEBEB",
+                                    name + " J/Psi window, EB-EB;M [GeV];Events",
+                                    jpsiEleMassBins_,
+                                    jpsiEleMassMin_,
+                                    jpsiEleMassMax_);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +274,8 @@ void ScoutingDileptonMonitor::analyze(edm::Event const& iEvent, edm::EventSetup 
     edm::LogInfo("ScoutingDileptonMonitor") << "doing electrons";
     analyzeCollection(
         iEvent, electronToken_, &vmBestTrackIndexToken_, electronCut_, electronHistos_, true, electronID_);
+    if (doJpsiElectrons_)
+      analyzeJpsiElectrons(iEvent);
   }
 }
 
@@ -303,7 +361,7 @@ void ScoutingDileptonMonitor::fillPairs(const std::vector<size_t>& indices,
                                         const edm::ValueMap<int>* vmBestIdx,
                                         MassHistos& histos,
                                         bool doEtaSplit) {
-  // keep only electrons with an associated track: needed for the charge and the direction
+  // keep only electrons with an associated track: needed for the charge
   std::vector<std::pair<size_t, int>> withTrack;  // (collection index, best track index)
   withTrack.reserve(indices.size());
   for (const size_t idx : indices) {
@@ -325,8 +383,8 @@ void ScoutingDileptonMonitor::fillPairs(const std::vector<size_t>& indices,
       if (el_i.trkcharge()[trk_i] * el_j.trkcharge()[trk_j] >= 0)
         continue;
 
-      const auto p4 = scouting::p4El(el_i, trk_i, useElectronTrackDirection_) +
-                      scouting::p4El(el_j, trk_j, useElectronTrackDirection_);
+      const auto p4 =
+          scouting::p4(el_i, scoutingDQMUtils::ELECTRON_MASS) + scouting::p4(el_j, scoutingDQMUtils::ELECTRON_MASS);
       const double mass = p4.mass();
 
       histos.full->Fill(mass);
@@ -339,6 +397,84 @@ void ScoutingDileptonMonitor::fillPairs(const std::vector<size_t>& indices,
         (barrel ? histos.barrel : histos.endcap)->Fill(mass);
       }
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// passJpsiElectronTrigger - any path starting with one of jpsiEleTriggers fired
+// ---------------------------------------------------------------------------
+bool ScoutingDileptonMonitor::passJpsiElectronTrigger(const edm::Event& iEvent) const {
+  if (jpsiEleTriggers_.empty())
+    return true;
+
+  const auto& triggerResults = iEvent.getHandle(triggerResultsToken_);
+  if (!triggerResults.isValid()) {
+    edm::LogWarning("ScoutingDileptonMonitor") << "Invalid TriggerResults handle, skipping J/Psi -> ee";
+    return false;
+  }
+
+  const edm::TriggerNames& triggerNames = iEvent.triggerNames(*triggerResults);
+  for (unsigned int i = 0; i < triggerNames.size(); ++i) {
+    if (!triggerResults->accept(i))
+      continue;
+    for (const auto& pattern : jpsiEleTriggers_) {
+      if (triggerNames.triggerName(i).find(pattern) == 0)
+        return true;
+    }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// analyzeJpsiElectrons - mirrors the dielectron mass of the EGM scouting studies:
+// pT(SC) > jpsiElePtMin, best GSF track (scoutingElectronGsfTrackIdx) with
+// |eta| < jpsiEleTrackEtaMax, cut-based ID, two leading electrons with opposite charge,
+// direction from the GSF track
+// ---------------------------------------------------------------------------
+void ScoutingDileptonMonitor::analyzeJpsiElectrons(const edm::Event& iEvent) {
+  const auto& handle = iEvent.getHandle(electronToken_);
+  if (!handle.isValid() || !passJpsiElectronTrigger(iEvent))
+    return;
+
+  const auto& rhoHandle = iEvent.getHandle(rhoToken_);
+  const double rho = rhoHandle.isValid() ? *rhoHandle : 0.;
+
+  std::vector<std::pair<const Run3ScoutingElectron*, size_t>> selected;  // (electron, best track index)
+  for (const auto& el : *handle) {
+    if (el.pt() <= jpsiElePtMin_)
+      continue;
+    size_t trkIdx = 0;
+    if (!scoutingDQMUtils::scoutingElectronGsfTrackIdx(el, trkIdx))
+      continue;
+    if (std::abs(el.trketa()[trkIdx]) >= jpsiEleTrackEtaMax_)
+      continue;
+    if (!scoutingDQMUtils::scoutingElectronCutBasedID(el, rho, jpsiEleWP_, jpsiEleUseIso_))
+      continue;
+    selected.emplace_back(&el, trkIdx);
+  }
+
+  edm::LogInfo("ScoutingDileptonMonitor") << "J/Psi electron size: " << selected.size();
+  if (selected.size() < 2)
+    return;
+
+  std::partial_sort(selected.begin(), selected.begin() + 2, selected.end(), [](const auto& a, const auto& b) {
+    return a.first->pt() > b.first->pt();
+  });
+  const auto& [el_1, trk_1] = selected[0];
+  const auto& [el_2, trk_2] = selected[1];
+
+  if (el_1->trkcharge()[trk_1] * el_2->trkcharge()[trk_2] >= 0)
+    return;
+
+  const double mass = (scouting::p4ElTrackDirection(*el_1, trk_1) + scouting::p4ElTrackDirection(*el_2, trk_2)).mass();
+  const bool ebeb = std::abs(el_1->eta()) < barrelEta_ && std::abs(el_2->eta()) < barrelEta_;
+
+  auto& h = jpsiElectronHistos_;
+  h.lowMass->Fill(mass);
+  h.jpsiMass->Fill(mass);
+  if (ebeb) {
+    h.lowMassEBEB->Fill(mass);
+    h.jpsiMassEBEB->Fill(mass);
   }
 }
 
@@ -368,8 +504,21 @@ void ScoutingDileptonMonitor::fillDescriptions(edm::ConfigurationDescriptions& d
   desc.add<double>("barrelEta", 1.479);
   desc.add<bool>("muonID", true);
   desc.add<bool>("electronID", true);
-  desc.add<bool>("useElectronTrackDirection", true)
-      ->setComment("electron eta/phi from the best GSF track instead of the supercluster position");
+  desc.add<bool>("doJpsiElectrons", true)
+      ->setComment("J/Psi -> ee with the selection of the EGM scouting studies (needs doElectrons)");
+  desc.add<edm::InputTag>("rho", edm::InputTag("hltScoutingPFPacker", "rho"));
+  desc.add<edm::InputTag>("triggerResults", edm::InputTag("TriggerResults", "", "HLT"));
+  desc.add<std::vector<std::string>>("jpsiEleTriggers", {"DST_PFScouting_DoubleEG"})
+      ->setComment("path-name prefixes, at least one must have fired; empty = no requirement");
+  desc.add<double>("jpsiElePtMin", 5.0);
+  desc.add<double>("jpsiEleTrackEtaMax", 2.5);
+  desc.add<std::string>("jpsiEleWP", "Loose")->setComment("cut-based ID: Veto, Loose, Medium or Tight");
+  desc.add<bool>("jpsiEleUseIso", false);
+  desc.add<int>("jpsiEleLowMassBins", 200);
+  desc.add<double>("jpsiEleLowMassMax", 20.0);
+  desc.add<int>("jpsiEleMassBins", 100);
+  desc.add<double>("jpsiEleMassMin", 2.0);
+  desc.add<double>("jpsiEleMassMax", 4.0);
   descriptions.addWithDefaultLabel(desc);
 }
 
