@@ -403,25 +403,25 @@ void ScoutingDileptonMonitor::fillPairs(const std::vector<size_t>& indices,
 // passJpsiElectronTrigger - any path starting with one of jpsiEleTriggers fired
 // ---------------------------------------------------------------------------
 bool ScoutingDileptonMonitor::passJpsiElectronTrigger(const edm::Event& iEvent) const {
-  if (jpsiEleTriggers_.empty())
-    return true;
+  // if (jpsiEleTriggers_.empty())
+  //   return true;
 
-  const auto& triggerResults = iEvent.getHandle(triggerResultsToken_);
-  if (!triggerResults.isValid()) {
-    edm::LogWarning("ScoutingDileptonMonitor") << "Invalid TriggerResults handle, skipping J/Psi -> ee";
-    return false;
-  }
+  // const auto& triggerResults = iEvent.getHandle(triggerResultsToken_);
+  // if (!triggerResults.isValid()) {
+  //   edm::LogWarning("ScoutingDileptonMonitor") << "Invalid TriggerResults handle, skipping J/Psi -> ee";
+  //   return false;
+  // }
 
-  const edm::TriggerNames& triggerNames = iEvent.triggerNames(*triggerResults);
-  for (unsigned int i = 0; i < triggerNames.size(); ++i) {
-    if (!triggerResults->accept(i))
-      continue;
-    for (const auto& pattern : jpsiEleTriggers_) {
-      if (triggerNames.triggerName(i).find(pattern) == 0)
-        return true;
-    }
-  }
-  return false;
+  // const edm::TriggerNames& triggerNames = iEvent.triggerNames(*triggerResults);
+  // for (unsigned int i = 0; i < triggerNames.size(); ++i) {
+  //   if (!triggerResults->accept(i))
+  //     continue;
+  //   for (const auto& pattern : jpsiEleTriggers_) {
+  //     if (triggerNames.triggerName(i).find(pattern) == 0)
+  //       return true;
+  //   }
+  // }
+  return true;
 }
 
 // ---------------------------------------------------------------------------
