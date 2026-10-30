@@ -66,9 +66,27 @@ namespace scoutingDQMUtils {
     }
   }
 
-  inline bool scoutingElectronGsfTrackID(const Run3ScoutingElectron& el, size_t trackIdx) {
-    if (trackIdx > el.trkpt().size())
+  // Expected phi(SC) - phi(track at vertex) from the bending in the solenoid up to the ECAL front face:
+  // -q * asin(0.3 * B * r / (2 pT)), i.e. ~ -q * 0.74/pT[GeV] rad in the barrel
+  inline double expectedDeltaPhiSCTrack(double trkPt, int trkCharge, double scEta) {
+    constexpr double kBField = 3.8;     // T
+    constexpr double kRadiusEB = 1.29;  // m, ECAL barrel front face
+    constexpr double kZEE = 3.15;       // m, ECAL endcap front face
+    const double absEta = std::abs(scEta);
+    const double radius = absEta < ELE_etaEB ? kRadiusEB : kZEE / std::sinh(absEta);
+    return -trkCharge * std::asin(std::min(1., 0.3 * kBField * radius / (2. * trkPt)));
+  }
+
+  // dPhiMax is applied to |deltaPhi(SC, track at vertex)| after subtracting the expected bending,
+  // so the cut is symmetric in charge and does not reject low-pT tracks
+  inline bool scoutingElectronGsfTrackID(const Run3ScoutingElectron& el,
+                                         size_t trackIdx,
+                                         double trackPtMin = 12.,
+                                         double dPhiMax = 0.06) {
+    if (trackIdx >= el.trkpt().size()) {
       edm::LogError("ScoutingDQMUtils") << "Invalid track index for electron: Exceeds the number of tracks";
+      return false;
+    }
 
     math::PtEtaPhiMLorentzVector particleSC(el.pt(), el.eta(), el.phi(), scoutingDQMUtils::ELECTRON_MASS);
     math::PtEtaPhiMLorentzVector particleTrk(
@@ -77,25 +95,26 @@ namespace scoutingDQMUtils {
     double scEnergy = particleSC.energy();
     double trkEnergy = particleTrk.energy();
     double relEnergyDiff = std::abs(scEnergy - trkEnergy) / scEnergy;
-    double dPhi = deltaPhi(particleSC.phi(), particleTrk.phi());
+    double dPhi = std::abs(deltaPhi(particleSC.phi(), particleTrk.phi()) -
+                           expectedDeltaPhiSCTrack(el.trkpt()[trackIdx], el.trkcharge()[trackIdx], el.eta()));
 
     bool isEB = (std::abs(el.eta()) < scoutingDQMUtils::ELE_etaEB);
     if (isEB) {
-      if (el.trkpt()[trackIdx] < 12)
+      if (el.trkpt()[trackIdx] < trackPtMin)
         return false;
       if (relEnergyDiff > 1)
         return false;
-      if (dPhi > 0.06)
+      if (dPhi > dPhiMax)
         return false;
       if (el.trkchi2overndf()[trackIdx] > 3)
         return false;
       return true;
     } else {
-      if (el.trkpt()[trackIdx] < 12)
+      if (el.trkpt()[trackIdx] < trackPtMin)
         return false;
       if (relEnergyDiff > 1)
         return false;
-      if (dPhi > 0.06)
+      if (dPhi > dPhiMax)
         return false;
       if (el.trkchi2overndf()[trackIdx] > 2)
         return false;
@@ -103,10 +122,13 @@ namespace scoutingDQMUtils {
     }
   }
 
-  inline bool scoutingElectronGsfTrackIdx(const Run3ScoutingElectron& el, size_t& trackIdx) {
+  inline bool scoutingElectronGsfTrackIdx(const Run3ScoutingElectron& el,
+                                          size_t& trackIdx,
+                                          double trackPtMin = 12.,
+                                          double dPhiMax = 0.06) {
     bool foundGoodGsfTrkIdx = false;
     for (size_t i = 0; i < el.trkpt().size(); ++i) {
-      if (scoutingDQMUtils::scoutingElectronGsfTrackID(el, i)) {
+      if (scoutingDQMUtils::scoutingElectronGsfTrackID(el, i, trackPtMin, dPhiMax)) {
         if (!foundGoodGsfTrkIdx) {
           foundGoodGsfTrkIdx = true;
           trackIdx = i;

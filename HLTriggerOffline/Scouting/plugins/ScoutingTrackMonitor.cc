@@ -336,8 +336,7 @@ void ScoutingTrackMonitor::bookHistograms(DQMStore::IBooker& ibooker, edm::Run c
   h_ndof = ibooker.book1DD("ndof", "Track ndof;ndof;Tracks", 60, -0.5, 59.5);
   h_normchi2 = ibooker.book1DD("normchi2", "Track #chi^{2}/ndof;#chi^{2}/ndof;Tracks", 100, 0., 10.);
   h_chi2prob = ibooker.book1DD("chi2prob", "Track #chi^{2} probability;P(#chi^{2},ndof);Tracks", 100, 0., 1.);
-  h_ptErrOverPt =
-      ibooker.book1DD("ptErrOverPt", "Track #sigma(p_{T})/p_{T};#sigma(p_{T})/p_{T};Tracks", 100, 0., 0.5);
+  h_ptErrOverPt = ibooker.book1DD("ptErrOverPt", "Track #sigma(p_{T})/p_{T};#sigma(p_{T})/p_{T};Tracks", 100, 0., 0.5);
 
   h_qoverp = ibooker.book1DD("qoverp", "Track q/p;q/p [GeV^{-1}];Tracks", 100, -5., 5.);
   h_lambda = ibooker.book1DD("lambda", "Track #lambda;#lambda [rad];Tracks", 100, -1.6, 1.6);
@@ -345,10 +344,9 @@ void ScoutingTrackMonitor::bookHistograms(DQMStore::IBooker& ibooker, edm::Run c
   h_qoverpErr = ibooker.book1DD("qoverpErr", "Track #sigma(q/p);#sigma(q/p) [GeV^{-1}];Tracks", 100, 0., 0.1);
   h_lambdaErr = ibooker.book1DD("lambdaErr", "Track #sigma(#lambda);#sigma(#lambda) [rad];Tracks", 100, 0., 0.01);
   h_phiErr = ibooker.book1DD("phiErr", "Track #sigma(#phi);#sigma(#phi) [rad];Tracks", 100, 0., 0.01);
-  h_dxyErrRaw = ibooker.book1DD(
-      "dxyErrStored", "Stored track #sigma(d_{xy});#sigma(d_{xy}) [#mum];Tracks", 100, 0., 2000.);
-  h_dzErrRaw =
-      ibooker.book1DD("dzErrStored", "Stored track #sigma(d_{z});#sigma(d_{z}) [#mum];Tracks", 100, 0., 5000.);
+  h_dxyErrRaw =
+      ibooker.book1DD("dxyErrStored", "Stored track #sigma(d_{xy});#sigma(d_{xy}) [#mum];Tracks", 100, 0., 2000.);
+  h_dzErrRaw = ibooker.book1DD("dzErrStored", "Stored track #sigma(d_{z});#sigma(d_{z}) [#mum];Tracks", 100, 0., 5000.);
 
   h_nPixelHits = ibooker.book1DD("nValidPixelHits", "Valid pixel hits;N_{pixel hits};Tracks", 11, -0.5, 10.5);
   h_nTrackerLayers = ibooker.book1DD(
@@ -412,8 +410,14 @@ void ScoutingTrackMonitor::bookHistograms(DQMStore::IBooker& ibooker, edm::Run c
       "p_chi2_vs_phi", "#chi^{2} vs #phi;#phi [rad];#LT#chi^{2}#GT", nPhiBins, phiMin, phiMax, 0., 100., "");
   p_chi2_vs_eta = ibooker.bookProfile(
       "p_chi2_vs_eta", "#chi^{2} vs #eta;#eta;#LT#chi^{2}#GT", nEtaBins, etaMin, etaMax, 0., 100., "");
-  p_normchi2_vs_phi = ibooker.bookProfile(
-      "p_normchi2_vs_phi", "#chi^{2}/ndof vs #phi;#phi [rad];#LT#chi^{2}/ndof#GT", nPhiBins, phiMin, phiMax, 0., 10., "");
+  p_normchi2_vs_phi = ibooker.bookProfile("p_normchi2_vs_phi",
+                                          "#chi^{2}/ndof vs #phi;#phi [rad];#LT#chi^{2}/ndof#GT",
+                                          nPhiBins,
+                                          phiMin,
+                                          phiMax,
+                                          0.,
+                                          10.,
+                                          "");
   p_normchi2_vs_eta = ibooker.bookProfile(
       "p_normchi2_vs_eta", "#chi^{2}/ndof vs #eta;#eta;#LT#chi^{2}/ndof#GT", nEtaBins, etaMin, etaMax, 0., 10., "");
   p_normchi2_vs_pt = makeProfileIfLog(ibooker,
@@ -454,14 +458,15 @@ void ScoutingTrackMonitor::bookHistograms(DQMStore::IBooker& ibooker, edm::Run c
                                           0.,
                                           1.,
                                           "");
-  p_chi2Prob_vs_dxy = ibooker.bookProfile("p_chi2Prob_vs_dxy",
-                                          "#chi^{2} probability vs |d_{xy}(BS)|;|d_{xy}(BS)| [#mum];#LT P(#chi^{2}) #GT",
-                                          50,
-                                          0.,
-                                          0.15 * cmToUm,
-                                          0.,
-                                          1.,
-                                          "");
+  p_chi2Prob_vs_dxy =
+      ibooker.bookProfile("p_chi2Prob_vs_dxy",
+                          "#chi^{2} probability vs |d_{xy}(BS)|;|d_{xy}(BS)| [#mum];#LT P(#chi^{2}) #GT",
+                          50,
+                          0.,
+                          0.15 * cmToUm,
+                          0.,
+                          1.,
+                          "");
   p_chi2Prob_vs_dz = ibooker.bookProfile("p_chi2Prob_vs_dz",
                                          "#chi^{2} probability vs d_{z}(BS);d_{z}(BS) [cm];#LT P(#chi^{2}) #GT",
                                          50,
@@ -470,8 +475,14 @@ void ScoutingTrackMonitor::bookHistograms(DQMStore::IBooker& ibooker, edm::Run c
                                          0.,
                                          1.,
                                          "");
-  p_qoverpt_vs_phi = ibooker.bookProfile(
-      "p_qoverpt_vs_phi", "q/p_{T} vs #phi;#phi [rad];#LT q/p_{T} #GT [GeV^{-1}]", nPhiBins, phiMin, phiMax, -5., 5., "");
+  p_qoverpt_vs_phi = ibooker.bookProfile("p_qoverpt_vs_phi",
+                                         "q/p_{T} vs #phi;#phi [rad];#LT q/p_{T} #GT [GeV^{-1}]",
+                                         nPhiBins,
+                                         phiMin,
+                                         phiMax,
+                                         -5.,
+                                         5.,
+                                         "");
   p_qoverpt_vs_eta = ibooker.bookProfile(
       "p_qoverpt_vs_eta", "q/p_{T} vs #eta;#eta;#LT q/p_{T} #GT [GeV^{-1}]", nEtaBins, etaMin, etaMax, -5., 5., "");
   p_ptRes_vs_phi = ibooker.bookProfile("p_ptResolution_vs_phi",
@@ -507,8 +518,8 @@ void ScoutingTrackMonitor::bookHistograms(DQMStore::IBooker& ibooker, edm::Run c
   // =====================================================================
   ibooker.setCurrentFolder(topFolderName_ + "/TracksBS");
 
-  h_dxyBS = ibooker.book1DD(
-      "dxyBS", "d_{xy} w.r.t. beam spot;d_{xy}(BS) [#mum];Tracks", 100, -0.15 * cmToUm, 0.15 * cmToUm);
+  h_dxyBS =
+      ibooker.book1DD("dxyBS", "d_{xy} w.r.t. beam spot;d_{xy}(BS) [#mum];Tracks", 100, -0.15 * cmToUm, 0.15 * cmToUm);
   h_dzBS = ibooker.book1DD("dzBS", "d_{z} w.r.t. beam spot;d_{z}(BS) [cm];Tracks", 100, -20., 20.);
   p_dxyBS_vs_phi = ibooker.bookProfile("p_dxyBS_vs_phi",
                                        "d_{xy}(BS) vs #phi;#phi [rad];#LT d_{xy}(BS) #GT [#mum]",
@@ -533,23 +544,17 @@ void ScoutingTrackMonitor::bookHistograms(DQMStore::IBooker& ibooker, edm::Run c
 
   // closure: reco::Track rebuilt from the perigee parameters vs. the values stored by the packer.
   // Both are w.r.t. the origin; any non-zero residual indicates a change in the packer's reference point.
-  h_dxyClosure = ibooker.book1DD("dxyClosure",
-                                 "d_{xy}(rebuilt) - d_{xy}(stored);#Delta d_{xy} [#mum];Tracks",
-                                 100,
-                                 -1.,
-                                 1.);
-  h_dzClosure =
-      ibooker.book1DD("dzClosure", "d_{z}(rebuilt) - d_{z}(stored);#Delta d_{z} [#mum];Tracks", 100, -1., 1.);
-  h_dxyErrClosure = ibooker.book1DD("dxyErrClosure",
-                                    "#sigma(d_{xy})(rebuilt) - #sigma(d_{xy})(stored);#Delta#sigma(d_{xy}) [#mum];Tracks",
-                                    100,
-                                    -1.,
-                                    1.);
-  h_dzErrClosure = ibooker.book1DD("dzErrClosure",
-                                   "#sigma(d_{z})(rebuilt) - #sigma(d_{z})(stored);#Delta#sigma(d_{z}) [#mum];Tracks",
-                                   100,
-                                   -1.,
-                                   1.);
+  h_dxyClosure =
+      ibooker.book1DD("dxyClosure", "d_{xy}(rebuilt) - d_{xy}(stored);#Delta d_{xy} [#mum];Tracks", 100, -1., 1.);
+  h_dzClosure = ibooker.book1DD("dzClosure", "d_{z}(rebuilt) - d_{z}(stored);#Delta d_{z} [#mum];Tracks", 100, -1., 1.);
+  h_dxyErrClosure =
+      ibooker.book1DD("dxyErrClosure",
+                      "#sigma(d_{xy})(rebuilt) - #sigma(d_{xy})(stored);#Delta#sigma(d_{xy}) [#mum];Tracks",
+                      100,
+                      -1.,
+                      1.);
+  h_dzErrClosure = ibooker.book1DD(
+      "dzErrClosure", "#sigma(d_{z})(rebuilt) - #sigma(d_{z})(stored);#Delta#sigma(d_{z}) [#mum];Tracks", 100, -1., 1.);
 
   // =====================================================================
   //  Tracks: association to the PV and impact parameters w.r.t. the PV
@@ -561,8 +566,8 @@ void ScoutingTrackMonitor::bookHistograms(DQMStore::IBooker& ibooker, edm::Run c
   h_trkAssoc->setBinLabel(1, "no vertex");
   h_trkAssoc->setBinLabel(2, "leading PV");
   h_trkAssoc->setBinLabel(3, "other PV");
-  h_trk_vz_minus_pvz = ibooker.book1DD(
-      "trkVzMinusPVz", "z_{ref}(track) - z(PV);z_{ref} - z_{PV} [cm];Tracks", 100, -0.5, 0.5);
+  h_trk_vz_minus_pvz =
+      ibooker.book1DD("trkVzMinusPVz", "z_{ref}(track) - z(PV);z_{ref} - z_{PV} [cm];Tracks", 100, -0.5, 0.5);
 
   h_dxy = ibooker.book1DD("dxy", "d_{xy} w.r.t. PV;d_{xy} [#mum];Tracks", 100, -0.15 * cmToUm, 0.15 * cmToUm);
   h_dz = ibooker.book1DD("dz", "d_{z} w.r.t. PV;d_{z} [#mum];Tracks", 100, -0.35 * cmToUm, 0.35 * cmToUm);
@@ -658,10 +663,8 @@ void ScoutingTrackMonitor::bookHistograms(DQMStore::IBooker& ibooker, edm::Run c
       "pvBS_dx", "x(PV) - x(BS at z_{PV}), all valid vertices;#Delta x [#mum];Vertices", 100, -300., 300.);
   h_pvBS_dy = ibooker.book1DD(
       "pvBS_dy", "y(PV) - y(BS at z_{PV}), all valid vertices;#Delta y [#mum];Vertices", 100, -300., 300.);
-  h_pv0BS_dx =
-      ibooker.book1DD("pv0BS_dx", "x(PV_{0}) - x(BS at z_{PV});#Delta x [#mum];Events", 100, -300., 300.);
-  h_pv0BS_dy =
-      ibooker.book1DD("pv0BS_dy", "y(PV_{0}) - y(BS at z_{PV});#Delta y [#mum];Events", 100, -300., 300.);
+  h_pv0BS_dx = ibooker.book1DD("pv0BS_dx", "x(PV_{0}) - x(BS at z_{PV});#Delta x [#mum];Events", 100, -300., 300.);
+  h_pv0BS_dy = ibooker.book1DD("pv0BS_dy", "y(PV_{0}) - y(BS at z_{PV});#Delta y [#mum];Events", 100, -300., 300.);
 
   // =====================================================================
   //  Beam spot
