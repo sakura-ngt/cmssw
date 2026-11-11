@@ -55,7 +55,7 @@ process.dqmoffline_step = cms.EndPath(process.hltOnlineBeamSpot+process.run3Scou
 
 cmsRun dqm.py >& dqm.log
 
-cmsDriver.py step3 -s HARVESTING:@standardDQM \
+cmsDriver.py step3 -s HARVESTING:hltScoutingPostProcessing \
 	     --conditions 160X_dataRun3_HLT_v1 \
 	     --data \
 	     --geometry DB:Extended \

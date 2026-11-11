@@ -633,7 +633,7 @@ void ScoutingDileptonMonitor::fillDescriptions(edm::ConfigurationDescriptions& d
           "E_SC/p_trk of the electrons in the Z (zMassMin-zMassMax) and J/Psi (jpsiMassMin-jpsiMassMax) windows");
   desc.add<int>("eOverPBins", 100);
   desc.add<double>("eOverPMin", 0.0);
-  desc.add<double>("eOverPMax", 2.5);
+  desc.add<double>("eOverPMax", 3.0);
   desc.add<std::vector<double>>("eOverPEtaBins", {0.0, 1.0, 1.479, 2.0, 2.5})
       ->setComment("|eta_SC| interval edges, one E/p histogram per interval");
   desc.add<int>("eOverPLumiMax", 2500)->setComment("x range of the E/p vs lumisection profiles");

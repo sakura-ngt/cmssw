@@ -10,6 +10,7 @@ from DQMOffline.HLTScouting.HLTScoutingDqmOffline_cff import *
 
 from HLTriggerOffline.Scouting.ScoutingMuonMonitoring_Client_cff import *
 from HLTriggerOffline.Scouting.HLTScoutingEGammaPostProcessing_cff import *
+from HLTriggerOffline.Scouting.scoutingEOverPHarvester_cfi import scoutingEOverPHarvester as hltScoutingEOverPHarvester
 
 hltScoutingMuonPostProcessing = cms.Sequence(muonEfficiencyNoVtx
                                              * muonEfficiencyVtx  
@@ -17,4 +18,4 @@ hltScoutingMuonPostProcessing = cms.Sequence(muonEfficiencyNoVtx
                                              * muonTriggerEfficiency_SingleMu
                                              )
 
-hltScoutingPostProcessing = cms.Sequence(hltScoutingMuonPostProcessing + hltScoutingEGammaPostProcessing)
+hltScoutingPostProcessing = cms.Sequence(hltScoutingMuonPostProcessing + hltScoutingEGammaPostProcessing + hltScoutingEOverPHarvester)
